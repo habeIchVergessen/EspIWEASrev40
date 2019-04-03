@@ -1,5 +1,5 @@
-#ifndef IWEAS_V40_H
-#define IWEAS_V40_H
+#ifndef _IWEAS_V40_H
+#define _IWEAS_V40_H
 
 #include "Arduino.h"
 
@@ -75,4 +75,4 @@ class IWEAS_v40 {
     static IWEAS_v40 *handleInstance(IWEAS_v40 *iweasV40, bool processOnly=false, bool searchOnly=false, String searchForName="", bool iterateOnly=false);
 };
 
-#endif  // IWEAS_V40_H
+#endif  // _IWEAS_V40_H
