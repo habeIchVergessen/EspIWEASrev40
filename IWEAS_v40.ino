@@ -4,24 +4,19 @@ IWEAS_v40::IWEAS_v40(byte relayPin, byte loadPin) {
   mRelayPin = relayPin;
   mLoadPin = loadPin;
 
-  pinMode(mRelayPin, OUTPUT); 
   pinMode(mLoadPin, INPUT_PULLUP);
+  mLastLoadState = getLoadState();
+
+  pinMode(mRelayPin, OUTPUT); 
+
+  bool result = setPowerState(PowerOff);
 
   IWEAS_v40::registerInstance(this);
 }
 
-bool IWEAS_v40::initialize(IWEAS_v40::PowerState powerState) {
-  if (getLoadState() == LoadOff && powerState == PowerOff)
-    return true;
-
-    bool result = setPowerState(powerState);
-    mLastLoadState = getLoadState();
-    
-    return result;
-}
-
 IWEAS_v40::LoadState IWEAS_v40::getLoadState() {
-  return (digitalRead(mLoadPin) == HIGH ? LoadOn : LoadOff);
+  delayMicroseconds(10000);
+  return (digitalRead(mLoadPin) == LOW ? LoadOn : LoadOff);
 }
 
 IWEAS_v40::PowerState IWEAS_v40::getPowerState() {
@@ -30,7 +25,7 @@ IWEAS_v40::PowerState IWEAS_v40::getPowerState() {
 
 bool IWEAS_v40::setPowerState(IWEAS_v40::PowerState powerState) {
   if (getPowerState() == powerState)
-    return false;
+    return true;
     
   return setRelayState((getRelayState() == RelayPos1 ? RelayPos2 : RelayPos1));
 }

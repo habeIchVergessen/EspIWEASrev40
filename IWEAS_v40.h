@@ -14,12 +14,6 @@ class IWEAS_v40 {
     typedef void (*ButtonPressCallback) (IWEAS_v40 *iweasV40);
     typedef void (*PowerStateCallback) (IWEAS_v40 *iweasV40);
 
-    typedef struct __attribute__((packed)) IWEAS_v40List
-    {
-      IWEAS_v40      *iweasV40;
-      IWEAS_v40List  *next;
-    };
-
     enum LoadState : byte {
       LoadOff     = 0x00
     , LoadOn      = 0x01
@@ -34,7 +28,6 @@ class IWEAS_v40 {
     };
     
     IWEAS_v40(byte relayPin=14, byte loadPin=4);
-    bool initialize(PowerState powerState=PowerOff);
     void registerPowerStateCallback(PowerStateCallback powerStateCallback);
     void registerButtonPressCallback(ButtonPressCallback buttonPressCallback, byte inputPin);
     PowerState getPowerState();
@@ -54,6 +47,12 @@ class IWEAS_v40 {
     };
 
   protected:
+    typedef struct __attribute__((packed)) IWEAS_v40List
+    {
+      IWEAS_v40      *iweasV40;
+      IWEAS_v40List  *next;
+    };
+
     String mName;
     byte mRelayPin, mLoadPin, mInputPin;
     LoadState mLastLoadState = LoadOff;

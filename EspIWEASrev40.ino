@@ -28,8 +28,16 @@ int         Time_VOLTAGE  =  120;                       // ALife-Intervall für 
 
 #include <ESP8266WiFi.h>
 #include "ESP8266WebServer.h"
+
+//#define _DEBUG
+#define _DEBUG_SETUP
+//#define _DEBUG_TIMING
+//#define _DEBUG_MQTT
+//#define _DEBUG_HEAP
+
 #include "EspConfig.h"
 #include "EspDebug.h"
+
 //#define _DEBUG_HTTP
 #include "EspWifi.h"
 #include "IWEAS_v40.h"
@@ -46,19 +54,13 @@ int         Time_VOLTAGE  =  120;                       // ALife-Intervall für 
 bool httpRequestProcessed     = false;
 bool optionsChanged           = false;
 
-//#define _DEBUG
-#define _DEBUG_SETUP
-//#define _DEBUG_TIMING
-//#define _DEBUG_MQTT
-#define _DEBUG_HEAP
-
-
 bool sendKeyValueProtocol = true;
 #ifdef _MQTT_SUPPORT
   bool sendMqtt = true;
 #endif
 
 // global objects
+EspWiFi espWiFi;
 EspConfig espConfig(PROGNAME);
 EspDebug espDebug;
 
@@ -91,26 +93,20 @@ void setup() {
 
   espDebug.enableSerialOutput();
   
-  DBG_PRINTF("\n\n");
-  DBG_PRINTF("esp:    %s\n", ESP.getFullVersion().c_str());
-  DBG_PRINTF("sketch: %d bytes (md5 %s) build %s\n", ESP.getSketchSize(), ESP.getSketchMD5().c_str(), String(PROGBUILD).c_str());
-
 #if defined(RELAY_1_SUPPORT) || defined(RELAY_2_SUPPORT)
 
   IWEAS_v40 *iweasV40;
 
+  // R1
   #ifdef RELAY_1_SUPPORT
-    // R1
     iweasV40 = new IWEAS_v40(PIN_RELAY_1, PIN_LOAD_1);
-    iweasV40->initialize(IWEAS_v40::PowerOff);
     iweasV40->registerPowerStateCallback(PowerState);
     iweasV40->registerButtonPressCallback(ButtonPressed, PIN_BUTTON_1);
   #endif  // RELAY_1_SUPPORT
     
-    // R2
+  // R2
   #ifdef RELAY_2_SUPPORT
     iweasV40 = new IWEAS_v40(PIN_RELAY_2, PIN_LOAD_2);
-    iweasV40->initialize(IWEAS_v40::PowerOff);
     iweasV40->registerPowerStateCallback(PowerState);
     iweasV40->registerButtonPressCallback(ButtonPressed, PIN_BUTTON_2);
   #endif  // RELAY_2_SUPPORT
@@ -118,21 +114,24 @@ void setup() {
 #endif  // RELAY_1_SUPPORT || RELAY_2_SUPPORT
 
   setupEspTools();
-  setupEspWifi();
+  EspWiFi::setup();
 
   // deviceConfig handler
-  registerDeviceConfigCallback(handleDeviceConfig);
-  registerDeviceListCallback(handleDeviceList);
+  espWiFi.registerDeviceConfigCallback(handleDeviceConfig);
+  espWiFi.registerDeviceListCallback(handleDeviceList);
 
 #ifdef _MQTT_SUPPORT
   espMqtt.subscribe(getMqttTarget(MqttQuelle, "+"), callback);
 #endif
 
-  espDebug.begin();
-  espDebug.registerInputCallback(handleInputStream);
-
   // read options from config
   readOptions();
+
+      DBG_PRINTF("\n\n");
+      DBG_PRINTF("esp:    %s\n", ESP.getFullVersion().c_str());
+      DBG_PRINTF("sketch: %d bytes (md5 %s) build %s\n", ESP.getSketchSize(), ESP.getSketchMD5().c_str(), String(PROGBUILD).c_str());
+  espDebug.begin();
+  espDebug.registerInputCallback(handleInputStream);
 
   // send initial state
   while (IWEAS_v40::hasNext() != NULL)
@@ -154,7 +153,7 @@ void loop() {
 //  scheduler.runSchedules();
   
   // handle wifi
-  loopEspWifi();
+  EspWiFi::loop();
 
   // tools
   loopEspTools();
@@ -171,7 +170,7 @@ void loop() {
 }
 
 void readOptions() {
-  setupHttp((toCheckboxValue(espConfig.getValue("http")) == "1"));
+  espWiFi.setupHttp((toCheckboxValue(espConfig.getValue("http")) == "1"));
   sendKeyValueProtocol = (toCheckboxValue(espConfig.getValue("kvpudp")) == "1");
   sendMqtt = (toCheckboxValue(espConfig.getValue("mqtt")) == "1");
 }
@@ -335,9 +334,16 @@ void handleInput(char r, bool hasValue, unsigned long value, bool hasValue2, uns
         }
       }
       break;
+    case 'r':
+      DBG_PRINTLN("reset: " + uptime());
+      ESP.reset();
+      break;
     case 'u':
       DBG_PRINTLN("uptime: " + uptime());
       printHeapFree();
+      DBG_PRINTF("\n\n");
+      DBG_PRINTF("esp:    %s\n", ESP.getFullVersion().c_str());
+      DBG_PRINTF("sketch: %d bytes (md5 %s) build %s\n", ESP.getSketchSize(), ESP.getSketchMD5().c_str(), String(PROGBUILD).c_str());
       break;
     case 'v':
       // Version info
@@ -536,7 +542,7 @@ void sendMessage(String message, unsigned long startTime) {
 #ifdef _DEBUG_TIMING_UDP
   unsigned long multiTime = micros();
 #endif
-  sendMultiCast(message);
+  espWiFi.sendMultiCast(message);
 #ifdef _DEBUG_TIMING_UDP
   DBG_PRINTLN("udp-multicast: " + elapTime(multiTime));
 #endif
