@@ -4,7 +4,8 @@ EspDebug::EspDebug() {
 }
 
 EspDebug::~EspDebug() {
-#ifdef ESP8266
+//#if defined(ESP8266) || defined(ESP32)
+#ifdef DBG_PRINTER_NET
   m_DbgServer = NULL;
 #endif
 }
@@ -14,7 +15,8 @@ EspDebug::~EspDebug() {
 int EspDebug::available() {
   int result = -1;
   
-#ifdef ESP8266
+//#if defined(ESP8266) || defined(ESP32)
+#ifdef DBG_PRINTER_NET
   result = m_DbgClient.available();
 #endif
 
@@ -24,7 +26,8 @@ int EspDebug::available() {
 int EspDebug::read() {
   int result = -1;
   
-#ifdef ESP8266
+//#if defined(ESP8266) || defined(ESP32)
+#ifdef DBG_PRINTER_NET
   result = m_DbgClient.read();
 #endif
 
@@ -34,7 +37,8 @@ int EspDebug::read() {
 int EspDebug::peek() {
   int result = -1;
 
-#ifdef ESP8266
+//#if defined(ESP8266) || defined(ESP32)
+#ifdef DBG_PRINTER_NET
   result = m_DbgClient.peek();
 #endif
 
@@ -42,7 +46,8 @@ int EspDebug::peek() {
 }
 
 void EspDebug::flush() {
-#ifdef ESP8266
+//#if defined(ESP8266) || defined(ESP32)
+#ifdef DBG_PRINTER_NET
   m_DbgClient.flush();
 #endif
 }
@@ -86,15 +91,19 @@ size_t EspDebug::write(const uint8_t *buffer, size_t size) {
 bool EspDebug::dbgClientClosed() {
   bool result = false;
 
-#ifdef ESP8266
+#if defined(DBG_PRINTER_NET) && defined(ESP8266)
   result = m_DbgClient.status() == CLOSED;
+#endif
+#if defined(DBG_PRINTER_NET) && defined(ESP32)
+  result = !m_DbgClient.connected();
 #endif
 
   return result;
 }
 
 void EspDebug::begin(uint16_t dbgServerPort) {
-#ifdef ESP8266
+//#if defined(ESP8266) || defined(ESP32)
+#ifdef DBG_PRINTER_NET
   m_DbgServer = WiFiServer(dbgServerPort);
   m_DbgServer.begin();
   m_DbgServer.setNoDelay(true);
@@ -103,7 +112,8 @@ void EspDebug::begin(uint16_t dbgServerPort) {
 
 void EspDebug::loop() {
   // probe new client
-#ifdef ESP8266
+//#if defined(ESP8266) || defined(ESP32)
+#ifdef DBG_PRINTER_NET
   if (m_DbgServer.hasClient()) {
     WiFiClient dbgClient = m_DbgServer.available();
 
@@ -132,7 +142,8 @@ void EspDebug::loop() {
   sendBuffer();  
 
   // input from network
-#ifdef ESP8266
+//#if defined(ESP8266) || defined(ESP32)
+#ifdef DBG_PRINTER_NET
   while (m_DbgClient.available() > 0 && m_inputCallback != NULL)
     m_inputCallback(&m_DbgClient);
 #endif
@@ -157,7 +168,8 @@ void EspDebug::sendBuffer() {
       m_SerialOut += wrote;
   }
     
-#ifdef ESP8266
+//#if defined(ESP8266) || defined(ESP32)
+#ifdef DBG_PRINTER_NET
   if (dbgClientClosed()) {
     if (m_setupLog && m_inPos == m_bufferSize) {
       m_buffer[m_inPos] = 0;

@@ -26,8 +26,15 @@ int         Time_VOLTAGE  =  120;                       // ALife-Intervall für 
 #define _MQTT_SUPPORT
 #define _ESPIWEAS_SUPPORT
 
-#include <ESP8266WiFi.h>
-#include "ESP8266WebServer.h"
+#ifdef ESP8266
+  #include <ESP8266WiFi.h>
+  #include "ESP8266WebServer.h"
+#endif
+
+#ifdef ESP32
+  #include <WiFi.h>
+  #include "WebServer.h"
+#endif
 
 //#define _DEBUG
 #define _DEBUG_SETUP
@@ -60,8 +67,8 @@ bool sendKeyValueProtocol = true;
 #endif
 
 // global objects
-EspWiFi espWiFi;
 EspConfig espConfig(PROGNAME);
+EspWiFi espWiFi;
 EspDebug espDebug;
 
 #ifdef _MQTT_SUPPORT
@@ -121,15 +128,12 @@ void setup() {
   espWiFi.registerDeviceListCallback(handleDeviceList);
 
 #ifdef _MQTT_SUPPORT
-  espMqtt.subscribe(getMqttTarget(MqttQuelle, "+"), callback);
+  espMqtt.subscribe(getMqttTarget(MqttQuelle, "+"), mqttSubscribeCallback);
 #endif
 
   // read options from config
   readOptions();
 
-      DBG_PRINTF("\n\n");
-      DBG_PRINTF("esp:    %s\n", ESP.getFullVersion().c_str());
-      DBG_PRINTF("sketch: %d bytes (md5 %s) build %s\n", ESP.getSketchSize(), ESP.getSketchMD5().c_str(), String(PROGBUILD).c_str());
   espDebug.begin();
   espDebug.registerInputCallback(handleInputStream);
 
@@ -205,16 +209,21 @@ void readVoltage(bool force) {
   if (!force && curr < lastVoltage + Time_VOLTAGE * 1000)
     return;
 
+// TODO: ESP32 impl
+#ifdef ESP8266
+
   float Spannung = ESP.getVcc() / 20000.0;
   lastVoltage = curr;
   Serial.println("readVoltage: Voltage = " + String(Spannung) + " @ " + String(lastVoltage));
 #ifdef _MQTT_SUPPORT
   pusblishToMqttTarget(MqttBattery, String(Spannung));
 #endif
+
+#endif
 }
 
 #ifdef _MQTT_SUPPORT
-void callback(char* kanal, byte* nachrichtInBytes, unsigned int length) {
+void mqttSubscribeCallback(char* kanal, byte* nachrichtInBytes, unsigned int length) {
   // channel
   String chan = String(kanal), subDevice = "", cmd = "";
 
@@ -336,14 +345,16 @@ void handleInput(char r, bool hasValue, unsigned long value, bool hasValue2, uns
       break;
     case 'r':
       DBG_PRINTLN("reset: " + uptime());
-      ESP.reset();
+#ifdef ESP8266
+    ESP.reset();
+#endif
+#ifdef ESP32
+    ESP.restart();
+#endif
       break;
     case 'u':
       DBG_PRINTLN("uptime: " + uptime());
       printHeapFree();
-      DBG_PRINTF("\n\n");
-      DBG_PRINTF("esp:    %s\n", ESP.getFullVersion().c_str());
-      DBG_PRINTF("sketch: %d bytes (md5 %s) build %s\n", ESP.getSketchSize(), ESP.getSketchMD5().c_str(), String(PROGBUILD).c_str());
       break;
     case 'v':
       // Version info
@@ -458,7 +469,12 @@ void handleCommandV() {
   DBG_PRINT("compiled at " + PROGBUILD + " ");
 }
 
+#ifdef ESP8266
 String handleDeviceConfig(ESP8266WebServer *server, uint16_t *resultCode) {
+#endif
+#ifdef ESP32
+String handleDeviceConfig(WebServer *server, uint16_t *resultCode) {
+#endif
   String result = "";
   String reqAction = server->arg(F("action")), deviceID = server->arg(F("deviceID"));
   

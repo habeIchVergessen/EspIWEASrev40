@@ -1,12 +1,15 @@
 #include "Arduino.h"
 
-#ifdef ESP8266
+#if defined(ESP8266) || defined(ESP32)
 
 #include "EspConfig.h"
 
 // class EspConfig
 EspConfig::EspConfig(String appName) {
   mAppName = appName;
+}
+
+void EspConfig::setup() {
   SPIFFS.begin();
   if (openRead()) {
     while (configFile.available()) {
@@ -156,5 +159,5 @@ EspDeviceConfig EspConfig::getDeviceConfig(String deviceName) {
 EspDeviceConfig::EspDeviceConfig(String deviceName) : EspConfig(deviceName) {
 }
 
-#endif  // ESP8266
+#endif  // ESP8266 || ESP32
 

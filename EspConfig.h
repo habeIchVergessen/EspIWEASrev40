@@ -3,9 +3,13 @@
 
 #include "Arduino.h"
 
-#ifdef ESP8266
+#if defined(ESP8266) || defined(ESP32)
 
 #include "FS.h"
+
+#ifdef ESP32
+  #include "SPIFFS.h"
+#endif
 
 class EspDeviceConfig;
 
@@ -14,6 +18,7 @@ public:
   EspConfig(String appName);
   ~EspConfig();
 
+  void    setup();
   String  getValue(String name);
   void    setValue(String name, String value);
   void    unsetValue(String name);
@@ -48,6 +53,6 @@ public:
 
 extern EspConfig espConfig;
 
-#endif  // ESP8266
+#endif  // ESP8266 || ESP32
 
 #endif	// _ESP_CONFIG_H

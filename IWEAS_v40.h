@@ -27,7 +27,7 @@ class IWEAS_v40 {
     , RelayPos2   = 0x01
     };
     
-    IWEAS_v40(byte relayPin=14, byte loadPin=4);
+    IWEAS_v40(byte relayPin, byte loadPin);
     void registerPowerStateCallback(PowerStateCallback powerStateCallback);
     void registerButtonPressCallback(ButtonPressCallback buttonPressCallback, byte inputPin);
     PowerState getPowerState();

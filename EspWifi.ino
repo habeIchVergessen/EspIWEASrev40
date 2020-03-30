@@ -1,4 +1,4 @@
-#ifdef ESP8266
+#if defined(ESP8266) || defined(ESP32)
 
 #include "EspWifi.h"
 
@@ -9,18 +9,53 @@ void EspWiFi::setup() {
   espWiFi.setupInternal();
 }
 
+void EspWiFi::setHostname(String hostname) {
+#ifdef ESP8266
+  WiFi.hostname(hostname);
+#endif  
+#ifdef ESP32
+  WiFi.setHostname(hostname.c_str());
+#endif  
+}
+
 void EspWiFi::setupInternal() {
   String hostname = espConfig.getValue("hostname");
   if (hostname != "")
-    WiFi.hostname(hostname);
+    setHostname(hostname);
 
-  DBG_PRINT("Hostname: "); DBG_PRINTLN(WiFi.hostname());
+#ifdef ESP32
+  // overwrite default hostname
+  if (hostname == "") {
+    WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
+    setHostname(getDefaultHostname());
+  }
+#endif
+
+  DBG_PRINT("Hostname: "); DBG_PRINTLN(getHostname());
   DBG_PRINT("MAC:      "); DBG_PRINTLN(WiFi.macAddress());
+
+#ifdef ESP32
+  // restore wifi connect data
+  String ssid = "", password = "";
+  
+  if (preferences.begin(PrefName, true)) {
+    ssid = preferences.getString(PrefSsid, "");
+    password = base64Decode(preferences.getString(PrefPwd, ""));
+    preferences.end();
+  }  
+
+  if (WiFi.SSID() == "" && ssid != "")
+    WiFi.begin(ssid.c_str(), password.c_str());
+#endif
 
   setupWifi();
 
   // init http server
   setupHttp();
+
+#ifdef ESP32
+  WiFiUdp.beginMulticast(ipMulti, portMulti);
+#endif
 }
 
 void EspWiFi::loop() {
@@ -35,7 +70,7 @@ void EspWiFi::loopInternal() {
     
     String hostname = espConfig.getValue("hostname");
     if (hostname != "")
-      WiFi.hostname(hostname);
+      setHostname(hostname);
     setupWifi();
     
     yield();
@@ -110,8 +145,8 @@ void EspWiFi::statusWifi(bool reconnect) {
 
 void EspWiFi::setupSoftAP() {
   bool run = (WiFi.status() != WL_CONNECTED);
-  bool softAP = (ipString(WiFi.softAPIP()) != "0.0.0.0");
-  
+  bool softAP = (WiFi.getMode() & WIFI_AP); //(ipString(WiFi.softAPIP()) != "0.0.0.0");
+
   if (run && !softAP) {
     DBG_PRINT("starting SoftAP: ");
   
@@ -141,6 +176,14 @@ void EspWiFi::configWifi() {
   }
   if (WiFi.SSID() != ssid && ssid != "") {
     reconfigWifi(ssid, server.arg("password"));
+#ifdef ESP32
+    // store wifi connect data
+    if (preferences.begin(PrefName, false)) {
+      preferences.putString(PrefSsid, ssid);
+      preferences.putString(PrefPwd, base64::encode(server.arg("password")));
+      preferences.end();
+    }
+#endif
   }
 
   httpRequestProcessed = true;
@@ -164,8 +207,8 @@ void EspWiFi::configNet() {
   if (hostname == "" || hostname == defaultHostname) {
   // reset to default
     espConfig.unsetValue("hostname");
-    if (defaultHostname != WiFi.hostname())
-      WiFi.hostname(defaultHostname);
+    if (defaultHostname != getHostname())
+      setHostname(defaultHostname);
   } else
     espConfig.setValue("hostname", hostname.c_str());
   
@@ -208,6 +251,57 @@ void EspWiFi::configNet() {
 
   DBG_PRINT("\n");
 }
+
+#ifdef ESP32
+String EspWiFi::base64Decode(String encoded) {
+  String result = "";
+
+  if (encoded.length() > 0 && encoded.length() % 4 == 0) {
+    size_t decodedLen = (float)encoded.length() * 0.75f; // * 6/8
+    char decoded[decodedLen+1];
+
+    uint32_t data = 0;
+    for (int idx=0; idx<encoded.length(); idx++) {
+      byte dataIdx = encoded.c_str()[idx];      
+      // A-Z
+      if (dataIdx >= 0x41 && dataIdx <= 0x5a)
+        dataIdx -= 0x41;
+      // a-z
+      else if (dataIdx >= 0x61 && dataIdx <= 0x7a)
+        dataIdx -= 0x61 - 0x1A;
+      // 0-9
+      else if (dataIdx >= 0x30 && dataIdx <= 0x39)
+        dataIdx += 0x34 - 0x30;
+      // +
+      else if (dataIdx == 0x0b)
+        dataIdx = 0x3E;
+      // /
+      else if (dataIdx == 0x47)
+        dataIdx = 0x3F;
+      else if (dataIdx == 0x3d)
+        dataIdx = 0xFF;
+      else
+        return "";
+
+      data <<= 6;
+      if (dataIdx != 0xFF)
+        data += dataIdx;
+
+      if (idx % 4 == 3) {
+        size_t didx = (idx - 3) * 0.75f;
+        decoded[didx]   = (data & 0x00FF0000) >> 16;
+        decoded[didx+1] = (data & 0x0000FF00) >> 8;
+        decoded[didx+2] = (data & 0x000000FF);
+        decoded[didx+3] = 0x00;
+        data = 0;
+      }
+    }
+    result = String(decoded);
+  }
+  
+  return result;
+}
+#endif
 
 void EspWiFi::setupHttp(bool start) {
 //  if (MDNS.begin(WiFi.hostname().c_str()))
@@ -277,7 +371,7 @@ void EspWiFi::httpHandleRoot() {
   String html = "<table><tr><td>ssid:</td><td>" + WiFi.SSID() + "</td><td><a id=\"wifi\" class=\"dc\">...</a></td></tr>";
   if (WiFi.status() == WL_CONNECTED) {
     html += F("<tr><td>Status:</td><td>connected</td><td></td></tr>");
-    html += F("<tr><td>Hostname:</td><td>"); html += WiFi.hostname(); html += F(" (MAC: "); html += WiFi.macAddress();html += F(")</td><td rowspan=\"2\">");
+    html += F("<tr><td>Hostname:</td><td>"); html += getHostname(); html += F(" (MAC: "); html += WiFi.macAddress();html += F(")</td><td rowspan=\"2\">");
     html += netConfig; html += F("</td></tr>");
     html += F("<tr><td>IP:</td><td>"); html += ipString(WiFi.localIP()); html += F("/"); html +=ipString(WiFi.subnetMask()); html += F(" "); html += ipString(WiFi.gatewayIP()); html += F("</td></tr>");
   } else {
@@ -704,8 +798,14 @@ boolean EspWiFi::sendMultiCast(String msg) {
     return result;
 
 #ifndef _ESP_WIFI_UDP_MULTICAST_DISABLED
+#ifdef ESP8266
   if (WiFiUdp.beginPacketMulticast(ipMulti, portMulti, WiFi.localIP()) == 1) {
     WiFiUdp.write(msg.c_str());
+#endif
+#ifdef ESP32
+  if (WiFiUdp.beginMulticastPacket() == 1) {
+    WiFiUdp.write((uint8_t*)msg.c_str(), msg.length());
+#endif
     WiFiUdp.endPacket();
     yield();  // force ESP8266 background tasks (wifi); multicast requires approx. 600 µs vs. delay 1ms
     result = true;
@@ -721,17 +821,30 @@ String EspWiFi::ipString(IPAddress ip) {
 
 String EspWiFi::getChipID() {
   char buf[10];
+#ifdef ESP8266
   sprintf(buf, "%08d", (unsigned int)ESP.getChipId());
+#endif
+#ifdef ESP32
+  String mac = WiFi.macAddress();
+  sprintf(buf, "%08d", strtol(String(mac.substring(9, 11) + mac.substring(12, 14) + mac.substring(15, 17)).c_str(), NULL, 16));
+#endif
+  
   return String(buf);
 }
 
-String EspWiFi::getDefaultHostname() {
-  uint8_t mac[6];
-  char buf[11];
-  WiFi.macAddress(mac);
-  sprintf(buf, "ESP_%02X%02X%02X", mac[3], mac[4], mac[5]);
+String EspWiFi::getHostname() {
+#ifdef ESP8266
+  return WiFi.hostname();
+#endif  
+#ifdef ESP32
+  return WiFi.getHostname();
+#endif  
+}
 
-  return String(buf);
+String EspWiFi::getDefaultHostname() {
+  String mac = WiFi.macAddress();
+
+  return "ESP_" + mac.substring(9, 11) + mac.substring(12, 14) + mac.substring(15, 17);
 }
 
 void EspWiFi::printUpdateError() {
@@ -771,7 +884,12 @@ void EspWiFi::httpHandleOTA() {
 
   if (doReset) {
     delay(1000);
+#ifdef ESP8266
     ESP.reset();
+#endif
+#ifdef ESP32
+    ESP.restart();
+#endif
   }
   httpRequestProcessed = true;
 }
@@ -1026,5 +1144,5 @@ void EspWiFi::httpHandleOTAatmega328Data() {
 
 #endif  // _OTA_ATMEGA328_SERIAL
 
-#endif  // ESP8266
+#endif  // ESP8266 || ESP32
 

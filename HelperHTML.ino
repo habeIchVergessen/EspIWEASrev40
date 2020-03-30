@@ -1,4 +1,4 @@
-#ifdef ESP8266
+#if defined(ESP8266) || defined(ESP32)
 
 #ifdef _MQTT_SUPPORT
   #include "EspConfig.h"
@@ -43,7 +43,12 @@ String htmlBody(String html) {
 }
 
 String wifiForm() {
+#ifdef ESP8266
   struct station_config current_conf;
+#endif
+#ifdef ESP32
+  wifi_sta_config_t current_conf;
+#endif
   
   String action = F("/config?ChipID=");
   action += getChipID();
@@ -58,14 +63,12 @@ String wifiForm() {
 }
 
 String netForm() {
-  struct station_config current_conf;
-  
   String action = F("/config?ChipID=");
   action += getChipID();
   action += F("&net=submit&hostname=&address=&mask=&gateway=&dns=");
 
   String html = htmlLabel("hostname", "hostname: ");
-  String hostname = WiFi.hostname(), defaultHostname = getDefaultHostname();
+  String hostname = getHostname(), defaultHostname = getDefaultHostname();
   html += htmlInput("hostname", "",  (hostname == defaultHostname ? "" : hostname), 32, "", "", defaultHostname) + htmlNewLine();
   html += htmlLabel("address", "ip: ");
   html += htmlInput("address", ipAddress,  espConfig.getValue("address"), 15) + htmlNewLine();
@@ -331,5 +334,5 @@ String htmlSelect(String pName, String pOptions, String pOnChange) {
   return result;
 }
 
-#endif  // ESP8266
+#endif  // ESP8266 || ESP32
 

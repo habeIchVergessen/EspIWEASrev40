@@ -1,16 +1,43 @@
 #ifndef _ESP_WIFI_H
 #define _ESP_WIFI_H
 
-#ifdef ESP8266
+#if defined(ESP8266) || defined(ESP32)
+
+#ifdef ESP32
+  #define uint8  uint8_t
+  #define uint16 uint16_t
+  #define uint32 uint32_t
+#endif
 
 #define _OTA_NO_SPIFFS  // don't use SPIFFS to store temporary uploaded data
 
 #include "Arduino.h"
 
-#include "ESP8266WebServer.h"
-#include "ESP8266WiFi.h"
+#ifdef ESP8266
+  #include "ESP8266WebServer.h"
+  #include "ESP8266WiFi.h"
+#endif
+
+#ifdef ESP32
+  #include <WiFi.h>
+  #include "WebServer.h"
+  #include "Update.h"
+  #include <Preferences.h>
+  #include <base64.h>
+  
+  Preferences preferences;
+
+  #define PrefName "EspWifi"
+  #define PrefSsid "ssid"
+  #define PrefPwd  "pwd"
+#endif
+
 #include "WiFiClient.h"
-#include "ESP8266mDNS.h"
+
+#ifdef ESP8266
+  #include "ESP8266mDNS.h"
+#endif
+
 #include "WiFiUDP.h"
 #include "FS.h"
 #include "detail/RequestHandlersImpl.h"
@@ -28,22 +55,30 @@
   IntelHexFormatParser *intelHexFormatParser = NULL;
 #endif
 
-extern "C" {
-#include "user_interface.h"
-}
+#ifdef ESP8266
+  extern "C" {
+    #include "user_interface.h"
+  }
+#endif
 
 #include "EspDebug.h"
 
 class EspWiFi {
   public:
     typedef String (*DeviceListCallback) ();
+#ifdef ESP8266
     typedef String (*DeviceConfigCallback) (ESP8266WebServer *server, uint16_t *result);
+#endif
+#ifdef ESP32
+    typedef String (*DeviceConfigCallback) (WebServer *server, uint16_t *result);
+#endif
     EspWiFi();
     static void setup();
     static void loop();
     void setupHttp(bool start=true);
     boolean sendMultiCast(String msg);
     static String getChipID();
+    static String getHostname();
     static String getDefaultHostname();
 
 #if defined(_ESP1WIRE_SUPPORT) || defined(_ESPSERIALBRIDGE_SUPPORT) || defined(_ESPIWEAS_SUPPORT)
@@ -60,6 +95,7 @@ class EspWiFi {
 #endif  // _ESP1WIRE_SUPPORT
 
   protected:
+    void setHostname(String hostname);
     String otaFileName;
     File otaFile;
     bool lastWiFiStatus = false;
@@ -70,7 +106,12 @@ class EspWiFi {
     bool netConfigChanged = false;
     
     WiFiUDP WiFiUdp;
+#ifdef ESP8266
     ESP8266WebServer server;
+#endif
+#ifdef ESP32
+    WebServer server;
+#endif
     
     bool httpStarted = false;
 
@@ -105,6 +146,10 @@ class EspWiFi {
     void configWifi();
     void reconfigWifi(String ssid, String password);
     void configNet();
+
+#ifdef ESP32
+    String base64Decode(String encoded);
+#endif
 
     String ipString(IPAddress ip);
     void printUpdateError();
@@ -145,8 +190,9 @@ extern bool optionsChanged;
 extern bool httpRequestProcessed;
 
 String getChipID() { return EspWiFi::getChipID(); };
+String getHostname() { return EspWiFi::getHostname(); };
 String getDefaultHostname() { return EspWiFi::getDefaultHostname(); };
 
-#endif  // ESP8266
+#endif  // ESP8266 || ESP32
 
 #endif	// _ESP_WIFI_H
