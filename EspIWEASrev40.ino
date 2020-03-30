@@ -219,7 +219,7 @@ void readVoltage(bool force) {
   pusblishToMqttTarget(MqttBattery, String(Spannung));
 #endif
 
-#endif
+#endif  // ESP8266
 }
 
 #ifdef _MQTT_SUPPORT
