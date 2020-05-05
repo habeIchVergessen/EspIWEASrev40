@@ -117,7 +117,6 @@ class EspIWEASRequestHandler : public EspWiFiRequestHandler {
 #endif
     String menuHtml() override;
   
-    String getConfigUri() { return "/config"; };
     String getDevicesUri() { return "/devices"; };
 
     String handleDeviceList();
@@ -499,91 +498,6 @@ void handleCommandV() {
   DBG_PRINT("compiled at " + PROGBUILD + " ");
 }
 
-/*
-#ifdef ESP8266
-String handleDeviceConfig(ESP8266WebServer *server, uint16_t *resultCode) {
-#endif
-#ifdef ESP32
-String handleDeviceConfig(WebServer *server, uint16_t *resultCode) {
-#endif
-  String result = "";
-  String reqAction = server->arg(F("action")), deviceID = server->arg(F("deviceID"));
-  
-  if (reqAction != F("form") && reqAction != F("submit"))
-    return result;
-
-  if (reqAction == F("form")) {
-    String action = F("/config?ChipID=");
-    action += getChipID();
-    action += F("&deviceID=");
-    action += deviceID;
-    action += F("&action=submit");
-
-    String html = "";
-
-    bool togglePower = false;
-    if (deviceID.endsWith(".togglePower")) {
-      deviceID = deviceID.substring(0, deviceID.length() - 12);
-      togglePower = true;
-    }
-    
-    IWEAS_v40 *iweasV40 = IWEAS_v40::getInstance(deviceID);
-
-    if (togglePower) {
-      if (iweasV40 != NULL) {
-        IWEAS_v40::PowerState powerState = iweasV40->getPowerState();
-        iweasV40->togglePowerState();
-
-        if (powerState == iweasV40->getPowerState()) {
-          // no reload
-          *resultCode = 204;
-          return F("No Content");
-        }
-      }
-
-      // force reload
-      *resultCode = 205;
-      return F("Reset Content");
-    }
-
-    // config form
-    if (iweasV40 != NULL) {
-      html += String("Power: ") + (iweasV40->getPowerState() == IWEAS_v40::PowerOff ? "Off" : "On") + "<br>";
-      html += String("Status: ") + iweasV40->getStatus();
-    }
-    
-    if (html != "") {
-      *resultCode = 200;
-//      html = "<h4>" + device->getName() + " (" + deviceID + ")" + "</h4>" + html;
-      result = htmlForm(html, action, F("post"), F("configForm"), "", "");
-    }
-  }
-
-  if (reqAction == F("submit")) {
-    *resultCode = 200;
-    result = F("ok");
-  }
-  
-  return result;
-}
-
-String handleDeviceList() {
-  String result = "";
-
-  // search device
-  while (IWEAS_v40::hasNext() != NULL) {
-    IWEAS_v40 *iweasV40 = IWEAS_v40::getNextInstance();
-    String value = (iweasV40->getPowerState() == IWEAS_v40::PowerOff ? "Off" : "On");
-    result += String("<tr><td>") + iweasV40->getName() + "</td><td>" + "Power: ";
-    result += htmlAnker(iweasV40->getName() + ".togglePower", F("dc"), value);
-    result += "</td><td>";
-    result += htmlAnker(iweasV40->getName(), F("dc"), F("..."));
-    result += "</td></tr>";
-  }
-  
-  return result;
-}
-*/
 void sendMessage(String message, unsigned long startTime) {
   DBG_PRINTLN(message + " " + elapTime(startTime));
 #ifdef _DEBUG_TIMING_UDP
