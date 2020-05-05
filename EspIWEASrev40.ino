@@ -1,6 +1,6 @@
 
 #define PROGNAME "EspIWEASrev40"
-#define PROGVERS "0.1"
+#define PROGVERS "0.2a"
 #define PROGBUILD String(__DATE__) + " " + String(__TIME__)
 
 int         Time_VOLTAGE  =  120;                       // ALife-Intervall für Abfrage der Betriebsspannung in Sekunden
@@ -24,7 +24,7 @@ int         Time_VOLTAGE  =  120;                       // ALife-Intervall für 
 #endif  // RELAY_2_SUPPORT
 
 #define _MQTT_SUPPORT
-#define _ESPIWEAS_SUPPORT
+//#define _ESPIWEAS_SUPPORT
 
 #ifdef ESP8266
   #include <ESP8266WiFi.h>
@@ -48,6 +48,8 @@ int         Time_VOLTAGE  =  120;                       // ALife-Intervall für 
 //#define _DEBUG_HTTP
 #include "EspWifi.h"
 #include "IWEAS_v40.h"
+//#include "EspIWEASRequestHandler.h"
+#include "HelperHTML.h"
 
 #ifdef _MQTT_SUPPORT
   #include <PubSubClient.h>
@@ -93,6 +95,35 @@ void readVoltage(bool force=false);
 
 unsigned long lastVoltage = 0;
 
+// **************************************************
+// * RequestHandler
+// **************************************************
+class EspIWEASRequestHandler : public EspWiFiRequestHandler {
+  public:
+    bool canHandle(HTTPMethod method, String uri) override;
+#ifdef ESP8266
+    bool handle(ESP8266WebServer& server, HTTPMethod method, String uri) override;
+#endif
+#ifdef ESP32
+    bool handle(WebServer& server, HTTPMethod method, String uri) override;
+#endif
+
+  protected:
+#ifdef ESP8266
+    bool canHandle(ESP8266WebServer& server) override;
+#endif
+#ifdef ESP32
+    bool canHandle(WebServer& server) override;
+#endif
+    String menuHtml() override;
+  
+    String getConfigUri() { return "/config"; };
+    String getDevicesUri() { return "/devices"; };
+
+    String handleDeviceList();
+} espIWEASRequestHandler;
+
+
 void setup() {
 
   Serial.begin(115200);
@@ -123,11 +154,10 @@ void setup() {
   setupEspTools();
   EspWiFi::setup();
 
-  // deviceConfig handler
-  espWiFi.registerDeviceConfigCallback(handleDeviceConfig);
-  espWiFi.registerDeviceListCallback(handleDeviceList);
-
+  espWiFi.registerExternalRequestHandler(&espIWEASRequestHandler);
+  
 #ifdef _MQTT_SUPPORT
+  espMqtt.setup();
   espMqtt.subscribe(getMqttTarget(MqttQuelle, "+"), mqttSubscribeCallback);
 #endif
 
@@ -150,7 +180,7 @@ void loop() {
   }
   
 #ifdef _MQTT_SUPPORT
-  EspMqtt::loop();
+  espMqtt.loop();
 #endif
 
   // scheduler
@@ -469,6 +499,7 @@ void handleCommandV() {
   DBG_PRINT("compiled at " + PROGBUILD + " ");
 }
 
+/*
 #ifdef ESP8266
 String handleDeviceConfig(ESP8266WebServer *server, uint16_t *resultCode) {
 #endif
@@ -552,7 +583,7 @@ String handleDeviceList() {
   
   return result;
 }
-
+*/
 void sendMessage(String message, unsigned long startTime) {
   DBG_PRINTLN(message + " " + elapTime(startTime));
 #ifdef _DEBUG_TIMING_UDP
@@ -584,3 +615,134 @@ void print_warning(byte type, String msg) {
   DBG_PRINTLN(msg);
 }
 
+
+// **************************************************
+// * RequestHandler implementation
+// **************************************************
+bool EspIWEASRequestHandler::canHandle(HTTPMethod method, String uri) {
+  if (method == HTTP_GET && uri == getDevicesUri())
+    return true;
+
+  return false;
+}
+
+#ifdef ESP8266
+bool EspIWEASRequestHandler::canHandle(ESP8266WebServer& server) {
+#endif
+#ifdef ESP32
+bool EspIWEASRequestHandler::canHandle(WebServer& server) {
+#endif
+  if (canHandle(server.method(), server.uri()))
+    return true;
+    
+  if (server.method() == HTTP_POST && server.uri() == getConfigUri() && server.hasArg("deviceID"))
+    return true;
+
+  return false;
+}
+
+#ifdef ESP8266
+bool EspIWEASRequestHandler::handle(ESP8266WebServer& server, HTTPMethod method, String uri) {
+#endif
+#ifdef ESP32
+bool EspIWEASRequestHandler::handle(WebServer& server, HTTPMethod method, String uri) {
+#endif
+  if (method == HTTP_GET && uri == getDevicesUri()) {
+    String message = F("<div class=\"menu\"><sp><a id=\"back\" class=\"dc\">Back</a></sp></div>");
+    String html = F("<table id=\"devices\"><thead><tr><th>Name</th><th>Status</th></tr></thead>");
+    html += handleDeviceList();
+    html += F("</table>");
+    message += htmlFieldSet(html, "");
+
+    server.client().setNoDelay(true);
+    server.send(200, "text/html", htmlBody(message));
+
+    return (httpRequestProcessed = true);
+  }
+
+  if (method == HTTP_POST && uri == getConfigUri() && server.hasArg("deviceID")) {
+    String result = "";
+    String reqAction = server.arg(F("action")), deviceID = server.arg(F("deviceID"));
+  
+    if (reqAction != F("form") && reqAction != F("submit"))
+      return false;
+
+    if (reqAction == F("form")) {
+      String action = F("/config?ChipID=");
+      action += getChipID();
+      action += F("&deviceID=");
+      action += deviceID;
+      action += F("&action=submit");
+  
+      String html = "";
+  
+      bool togglePower = false;
+      if (deviceID.endsWith(".togglePower")) {
+        deviceID = deviceID.substring(0, deviceID.length() - 12);
+        togglePower = true;
+      }
+      
+      IWEAS_v40 *iweasV40 = IWEAS_v40::getInstance(deviceID);
+  
+      if (togglePower) {
+        if (iweasV40 != NULL) {
+          IWEAS_v40::PowerState powerState = iweasV40->getPowerState();
+          iweasV40->togglePowerState();
+  
+          if (powerState == iweasV40->getPowerState()) {
+            // no reload
+            server.client().setNoDelay(true);
+            server.send(204, "text/html", F("No Content"));
+            return (httpRequestProcessed = true);
+          }
+        }
+  
+        // force reload
+        server.client().setNoDelay(true);
+        server.send(205, "text/html", F("Reset Content"));
+        return (httpRequestProcessed = true);
+      }
+      
+      // config form
+      if (iweasV40 != NULL) {
+        html += String("Power: ") + (iweasV40->getPowerState() == IWEAS_v40::PowerOff ? "Off" : "On") + "<br>";
+        html += String("Status: ") + iweasV40->getStatus();
+      }
+      
+      if (html != "") {
+        server.client().setNoDelay(true);
+        server.send(200, "text/html", htmlForm(html, action, F("post"), F("configForm"), "", ""));
+        return (httpRequestProcessed = true);
+      }
+    }
+  
+    if (reqAction == F("submit")) {
+      server.client().setNoDelay(true);
+      server.send(200, "text/html", F("ok"));
+      return (httpRequestProcessed = true);
+    }
+  }
+
+  return false;
+}
+
+String EspIWEASRequestHandler::menuHtml() {
+  return F("<a href=\"/devices\" class=\"dc\">Devices</a><a id=\"options\" class=\"dc\">Options</a>");
+}
+
+String EspIWEASRequestHandler::handleDeviceList() {
+  String result = "";
+
+  // search device
+  while (IWEAS_v40::hasNext() != NULL) {
+    IWEAS_v40 *iweasV40 = IWEAS_v40::getNextInstance();
+    String value = (iweasV40->getPowerState() == IWEAS_v40::PowerOff ? "Off" : "On");
+    result += String("<tr><td>") + iweasV40->getName() + "</td><td>" + "Power: ";
+    result += htmlAnker(iweasV40->getName() + ".togglePower", F("dc"), value);
+    result += "</td><td>";
+    result += htmlAnker(iweasV40->getName(), F("dc"), F("..."));
+    result += "</td></tr>";
+  }
+  
+  return result;
+}

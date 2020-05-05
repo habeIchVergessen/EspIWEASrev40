@@ -1,37 +1,17 @@
 #if defined(ESP8266) || defined(ESP32)
 
+#include "HelperHTML.h"
+
 #ifdef _MQTT_SUPPORT
   #include "EspConfig.h"
 #endif
 
-#define textMark         F("\"")
-#define actionField      F(" action=")
-#define enctypeField     F(" enctype=")
-#define maxLengthField   F(" maxlength=")
-#define minField         F(" min=")
-#define maxField         F(" max=")
-#define methodField      F(" method=")
-#define nameField        F(" name=")
-#define typeField        F(" type=")
-#define valueField       F(" value=")
-#define idField          F(" id=")
-#define classField       F(" class=")
-#define titleField       F(" title=")
-#define onChangeField    F(" onchange=");
-#define checkBox         "checkbox"
-#define ipAddress        "ipAddress"
-
-// prototypes
-String htmlForm(String html, String pAction, String pMethod, String pID="", String pEnctype="", String pLegend="");
-String htmlInput(String pName, String pType, String pValue, int pMaxLength=0, String pMinNumber="", String pMaxNumber="", String pPlaceHolder="");
-String htmlFieldSet(String pHtml, String pLegend="");
-String htmlOption(String pValue, String pText, bool pSelected=false);
-String htmlSelect(String pName, String pOptions, String pOnChange="");
-
 String htmlBody(String html) {
-  String doc = F("<!DOCTYPE html><html lang=\"de\"><body>");
-  doc += F("<head>\n<link rel=\"stylesheet\" type=\"text/css\" href=\"/static/deviceList.css\">\n<script type=\"text/javascript\" src=\"/static/deviceList.js\"></script>\n</head>");
-  doc += F("<body onclick=\"javascript:windowClick(event)\"><center><div style=\"width: 30em;\">");
+  String doc = F("<!DOCTYPE html><html lang=\"de\">");
+  doc += F("<head>\n");
+  doc += htmlStyle("/static/deviceList.css");
+  doc += htmlScript("/static/deviceList.js");
+  doc += F("</head><body onclick=\"javascript:windowClick(event)\"><center><div style=\"width: 30em;\">");
   doc += "<h1>"; doc += PROGNAME; doc += " v"; doc += PROGVERS; doc += "@" + getChipID() + "</h1>";
   html.replace("\n", "<br>");
   doc += html;
@@ -268,7 +248,23 @@ String htmlButton(String pType, String pName, String pValue, String pText) {
   return result;
 }
 
-String htmlAnker(String pId, String pClass, String pText) {
+String htmlStyle(String hRef) {
+  String result = F("<link rel=\"stylesheet\" type=\"text/css\" href=\"");
+  result += hRef;
+  result += F("\">\n");
+
+  return result;
+}
+
+String htmlScript(String src) {
+  String result = F("<script type=\"text/javascript\" src=\"");
+  result += src;
+  result += F("\"></script>\n");
+
+  return result;
+}
+
+String htmlAnker(String pId, String pClass, String pText, String href) {
   String result = F("<a ");
 
   if (pId != "") {
@@ -285,11 +281,22 @@ String htmlAnker(String pId, String pClass, String pText) {
     result += textMark;
   }
   
+  if (href != "") {
+    result += hrefField;
+    result += textMark;
+    result += href;
+    result += textMark;
+  }
+
   result += F(">");
   result += pText;
   result += F("</a>");
   
   return result;  
+}
+
+String htmlMenuItem(String pId, String pText) {
+  return htmlAnker(pId, "dc", pText);
 }
 
 String htmlOption(String pValue, String pText) {

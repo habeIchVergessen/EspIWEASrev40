@@ -2,6 +2,9 @@
 
 #include "EspMqtt.h"
 
+void loopEspMqtt() {
+}
+
 EspMqtt::EspMqtt(String mqttClientName) {
   mMqttClientName   = mqttClientName + "@" + getChipID();
   mMqttTopicPrefix  = mqttClientName + "/" + getChipID() + "/";
@@ -9,39 +12,15 @@ EspMqtt::EspMqtt(String mqttClientName) {
   mqttClient.setClient(wifiClient);
 }
 
-void EspMqtt::loop() {
-  espMqtt.loopMqtt();
-}
-
-void EspMqtt::loopMqtt() {
-  if (!espMqttInitDone && (WiFi.status() == WL_CONNECTED)) {
-    espMqttInitDone = true;
-    sendAlive();
-  }
-  if (espMqttInitDone && (WiFi.status() == WL_CONNECTED)) {
-    mqttClient.loop();
-  }
-}
-
 bool EspMqtt::testConfig(String server, String port, String user, String password) {
   bool result = (server == "" && port == "");
   
   if ((server == "" && port == "") || ((result = connect(server, port, user, password, true)) && sendAlive())) {
-#ifdef _DEBUG_MQTT
-  DBG_PRINT("saving new mqtt config: ");
-  unsigned long connStart = micros();
-#endif
     espConfig.setValue(F("mqttServer"), server);
     espConfig.setValue(F("mqttPort"), port);
     espConfig.setValue(F("mqttUser"), user);
     espConfig.setValue(F("mqttPassword"), password);
-    bool saved = espConfig.saveToFile();
-#ifdef _DEBUG_MQTT
-  DBG_PRINTLN(String(saved ? "ok " : "failed ") + elapTime(connStart));
-#endif
-
-    if (server == "" && port == "")
-      disconnect();
+    espConfig.saveToFile();
   }
 
   return result;
@@ -114,7 +93,7 @@ bool EspMqtt::publish(String topic, String value, bool keepConnection) {
 }
 
 bool EspMqtt::sendAlive() {
-  return publish(F("Status"), F("alive"));
+  return publish(F("Status"), F("Alive"));
 }
 
 bool EspMqtt::subscribe(String topic, MQTT_CALLBACK_SIGNATURE, bool keepConnection) {
@@ -136,6 +115,58 @@ IPAddress EspMqtt::parseIP(String ip) {
     ip.remove(0, ip.indexOf(".")+1); 
   }
   return MyIP;
+}
+
+#ifdef ESP8266
+bool EspMqtt::EspMqttRequestHandler::handle(ESP8266WebServer& server, HTTPMethod method, String uri) {
+#endif
+#ifdef ESP32
+bool EspMqtt::EspMqttRequestHandler::handle(WebServer& server, HTTPMethod method, String uri) {
+#endif
+  if (server.method() == HTTP_POST && server.uri() == getConfigUri() && server.hasArg(espMqtt.mqttMenuId())) {
+    String mqttArg = server.arg(espMqtt.mqttMenuId());
+  
+    DBG_PRINT("mqtt ");
+    if (mqttArg == "") {
+      String result = F("<h4>MQTT</h4>");
+      result += mqttForm();
+      server.client().setNoDelay(true);
+      server.send(200, "text/html", result);
+      
+      return (httpRequestProcessed = true);
+    }
+    
+    if (mqttArg == "submit") {
+      if (espMqtt.testConfig(server.arg("server"), server.arg("port"), server.arg("user"), server.arg("password"))) {
+        server.client().setNoDelay(true);
+        server.send(200, "text/plain", "ok");
+      } else {
+        server.client().setNoDelay(true);
+        server.send(304, "text/plain", "MQTT connection test failed!");
+      }
+
+      return (httpRequestProcessed = true);
+    }
+  }
+
+  return false;
+}
+
+#ifdef ESP8266
+bool EspMqtt::EspMqttRequestHandler::canHandle(ESP8266WebServer& server) {
+#endif
+#ifdef ESP32
+bool EspMqtt::EspMqttRequestHandler::canHandle(WebServer& server) {
+#endif
+  if (server.method() == HTTP_POST && server.uri() == getConfigUri() && server.hasArg(espMqtt.mqttMenuId()))
+    return true;
+
+  return false;
+}
+
+
+String EspMqtt::EspMqttRequestHandler::menuHtml() {
+  return htmlMenuItem(espMqtt.mqttMenuId(), "MQTT");
 }
 
 #endif  // _MQTT_SUPPORT

@@ -40,13 +40,10 @@
 
 #include "WiFiUDP.h"
 #include "FS.h"
+#include "detail/RequestHandler.h"
 #include "detail/RequestHandlersImpl.h"
 
 #include "EspConfig.h"
-
-#ifdef _MQTT_SUPPORT
-  #include "EspMqtt.h"
-#endif
 
 #ifdef _OTA_ATMEGA328_SERIAL
   #include "IntelHexFormatParser.h"
@@ -62,6 +59,40 @@
 #endif
 
 #include "EspDebug.h"
+
+// prototype RequestHandler
+class EspWiFiRequestHandler :  public RequestHandler {
+  virtual bool canHandle(HTTPMethod method, String uri) { return false; };
+  virtual bool canUpload(String uri) { return false; };
+#ifdef ESP8266
+  virtual bool handle(ESP8266WebServer& server, HTTPMethod method, String uri) { return false; };
+  virtual void upload(ESP8266WebServer& server, String uri, HTTPUpload& upload) { };
+#endif
+#ifdef ESP32
+  virtual bool handle(WebServer& server, HTTPMethod method, String uri) { return false; };
+  virtual void upload(WebServer& server, String uri, HTTPUpload& upload) { };
+#endif
+
+protected:
+#ifdef ESP8266
+  virtual bool canHandle(ESP8266WebServer& server) { return false; };
+#endif
+#ifdef ESP32
+  virtual bool canHandle(WebServer& server) { return false; };
+#endif
+  String getConfigUri() { return "/config"; };
+
+  virtual String menuHtml() { return ""; };
+
+  bool mExternalRequestHandler = true;
+  EspWiFiRequestHandler *mNextRequestHandler = NULL;
+
+  bool isExternalRequestHandler() { return mExternalRequestHandler; };
+  EspWiFiRequestHandler *getNextRequestHandler() { return mNextRequestHandler ; }
+  void setNextRequestHandler(EspWiFiRequestHandler *nextRequestHandler) { mNextRequestHandler = nextRequestHandler; };
+
+  friend class EspWiFi; 
+};
 
 class EspWiFi {
   public:
@@ -81,20 +112,42 @@ class EspWiFi {
     static String getHostname();
     static String getDefaultHostname();
 
-#if defined(_ESP1WIRE_SUPPORT) || defined(_ESPSERIALBRIDGE_SUPPORT) || defined(_ESPIWEAS_SUPPORT)
+#if defined(_ESP1WIRE_SUPPORT) || defined(_ESPSERIALBRIDGE_SUPPORT)
     void registerDeviceConfigCallback(DeviceConfigCallback callback) { deviceConfigCallback = callback; };
 #endif
     
-#if defined(_ESP1WIRE_SUPPORT) || defined(_ESPIWEAS_SUPPORT)
-    void registerDeviceListCallback(DeviceListCallback callback) { deviceListCallback = callback; };
-#endif  // _ESP1WIRE_SUPPORT || _ESPIWEAS_SUPPORT
-    
 #ifdef _ESP1WIRE_SUPPORT
+    void registerDeviceListCallback(DeviceListCallback callback) { deviceListCallback = callback; };
     void registerScheduleConfigCallback(DeviceConfigCallback callback) { scheduleConfigCallback = callback; };
     void registerScheduleListCallback(DeviceListCallback callback) { scheduleListCallback = callback; };
 #endif  // _ESP1WIRE_SUPPORT
 
+    void registerExternalRequestHandler(EspWiFiRequestHandler *externalRequestHandler);
+
   protected:
+    class EspWiFiRequestHandlerImpl :  public EspWiFiRequestHandler {
+    public:
+      EspWiFiRequestHandlerImpl() { mExternalRequestHandler = false; };
+
+      bool canHandle(HTTPMethod method, String uri);
+      bool canUpload(String uri);
+      
+    #ifdef ESP8266
+      bool handle(ESP8266WebServer& server, HTTPMethod method, String uri);
+      void upload(ESP8266WebServer& server, String uri, HTTPUpload& upload);
+    #endif
+    #ifdef ESP32
+      bool handle(WebServer& server, HTTPMethod method, String uri);
+      void upload(WebServer& server, String uri, HTTPUpload& upload);
+    #endif
+      
+    } mEspWiFiRequestHandler;
+
+    String getConfigUri() { return mEspWiFiRequestHandler.getConfigUri(); };
+    String getDevListCssUri() { return "/static/deviceList.css"; };
+    String getDevListJsUri() { return "/static/deviceList.js"; };
+    String getOtaUri() { return "/ota/" + getChipID() + ".bin"; };
+    String getOtaAtMegaUri() { return "/ota/atmega328.bin"; };
     void setHostname(String hostname);
     String otaFileName;
     File otaFile;
@@ -112,22 +165,19 @@ class EspWiFi {
 #ifdef ESP32
     WebServer server;
 #endif
-    
+
     bool httpStarted = false;
 
-#if defined(_ESP1WIRE_SUPPORT) || defined(_ESPSERIALBRIDGE_SUPPORT) || defined(_ESPIWEAS_SUPPORT)
+#if defined(_ESP1WIRE_SUPPORT) || defined(_ESPSERIALBRIDGE_SUPPORT)
     DeviceConfigCallback deviceConfigCallback = NULL;
 #endif
     
-#if defined(_ESP1WIRE_SUPPORT) || defined(_ESPIWEAS_SUPPORT)
-    DeviceListCallback deviceListCallback = NULL;
-#endif  // _ESP1WIRE_SUPPORT || _ESPIWEAS_SUPPORT
-    
 #ifdef _ESP1WIRE_SUPPORT
+    DeviceListCallback deviceListCallback = NULL;
     DeviceConfigCallback scheduleConfigCallback = NULL;
     DeviceListCallback scheduleListCallback = NULL;
 #endif  // _ESP1WIRE_SUPPORT
-    
+
     // source: http://esp8266-re.foogod.com/wiki/SPI_Flash_Format
     typedef struct __attribute__((packed))
     {
@@ -160,10 +210,6 @@ class EspWiFi {
     void httpHandleDeviceListCss();
     void httpHandleDeviceListJss();
     void httpHandleNotFound();
-
-#ifdef _ESPIWEAS_SUPPORT
-    void httpHandleDevices();
-#endif
 
 #ifdef _ESP1WIRE_SUPPORT
     void httpHandleDevices();

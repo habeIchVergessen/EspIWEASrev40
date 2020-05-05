@@ -322,24 +322,13 @@ void EspWiFi::setupHttp(bool start) {
     return;
   
   DBG_PRINT("starting WebServer");
+  server.addHandler(&mEspWiFiRequestHandler);
+  server.onNotFound(std::bind(&EspWiFi::httpHandleNotFound, this));
 
-  server.on("/", HTTP_GET, std::bind(&EspWiFi::httpHandleRoot, this));
-
-  server.on("/config", HTTP_GET, std::bind(&EspWiFi::httpHandleConfig, this));
-  server.on("/config", HTTP_POST, std::bind(&EspWiFi::httpHandleConfig, this));
-#if defined(_ESP1WIRE_SUPPORT) || defined(_ESPIWEAS_SUPPORT)
+#ifdef _ESP1WIRE_SUPPORT
   server.on("/devices", HTTP_GET, std::bind(&EspWiFi::httpHandleDevices, this));
-#endif  // _ESP1WIRE_SUPPORT || _ESPIWEAS_SUPPORT
-#if defined(_ESP1WIRE_SUPPORT)
   server.on("/schedules", HTTP_GET, std::bind(&EspWiFi::httpHandleSchedules, this));
 #endif  // _ESP1WIRE_SUPPORT
-  server.on("/static/deviceList.css", HTTP_GET, std::bind(&EspWiFi::httpHandleDeviceListCss, this));
-  server.on("/static/deviceList.js", HTTP_GET, std::bind(&EspWiFi::httpHandleDeviceListJss, this));
-  server.onNotFound(std::bind(&EspWiFi::httpHandleNotFound, this));
-  server.addHandler(new FunctionRequestHandler(std::bind(&EspWiFi::httpHandleOTA, this), std::bind(&EspWiFi::httpHandleOTAData, this), ("/ota/" + getChipID() + ".bin").c_str(), HTTP_POST));
-#ifdef _OTA_ATMEGA328_SERIAL
-  server.addHandler(new FunctionRequestHandler(std::bind(&EspWiFi::httpHandleOTAatmega328, this), std::bind(&EspWiFi::httpHandleOTAatmega328Data, this), String("/ota/atmega328.bin").c_str(), HTTP_POST));
-#endif
 
   server.begin(80);
   httpStarted = true;
@@ -347,22 +336,107 @@ void EspWiFi::setupHttp(bool start) {
   DBG_PRINTLN();
 }
 
+bool EspWiFi::EspWiFiRequestHandlerImpl::canHandle(HTTPMethod method, String uri) {
+  if (method == HTTP_GET && uri == "/")
+    return true;
+  if ((method == HTTP_GET || method == HTTP_POST) && uri == espWiFi.getConfigUri())
+    return true;
+  if (method == HTTP_GET && uri == espWiFi.getDevListCssUri())
+    return true;
+  if (method == HTTP_GET && uri == espWiFi.getDevListJsUri())
+    return true;
+  if (method == HTTP_POST && uri == espWiFi.getOtaUri())
+    return true;
+#ifdef _OTA_ATMEGA328_SERIAL
+  if (method == HTTP_POST && uri == espWiFi.getOtaAtMegaUri())
+    return true;
+#endif
+
+  return false;
+}
+
+bool EspWiFi::EspWiFiRequestHandlerImpl::canUpload(String uri) {
+  if (uri == espWiFi.getOtaUri())
+    return true;
+#ifdef _OTA_ATMEGA328_SERIAL
+  if (uri == espWiFi.getOtaAtMegaUri())
+    return true;
+#endif
+
+  return false;
+}
+
+#ifdef ESP8266
+bool EspWiFi::EspWiFiRequestHandlerImpl::handle(ESP8266WebServer& server, HTTPMethod method, String uri) {
+#endif
+#ifdef ESP32
+bool EspWiFi::EspWiFiRequestHandlerImpl::handle(WebServer& server, HTTPMethod method, String uri) {
+  void upload(WebServer& server, String uri, HTTPUpload& upload);
+#endif
+  if (method == HTTP_GET && uri == "/") {
+    espWiFi.httpHandleRoot();
+    return true;
+  }
+  if ((method == HTTP_GET || method == HTTP_POST) && uri == espWiFi.getConfigUri()) {
+    espWiFi.httpHandleConfig();
+    return true;
+  }
+  if (method == HTTP_GET && uri == espWiFi.getDevListCssUri()) {
+    espWiFi.httpHandleDeviceListCss();
+    return true;
+  }
+  if (method == HTTP_GET && uri == espWiFi.getDevListJsUri()) {
+    espWiFi.httpHandleDeviceListJss();
+    return true;
+  }
+  if (method == HTTP_POST && uri == espWiFi.getOtaUri()) {
+    espWiFi.httpHandleOTA();
+    return true;
+  }
+#ifdef _OTA_ATMEGA328_SERIAL
+  if (method == HTTP_POST && uri == espWiFi.getOtaAtMegaUri()) {
+    espWiFi.httpHandleOTAatmega328();
+    return true;
+  }
+#endif
+
+  return false;
+}
+
+#ifdef ESP8266
+void EspWiFi::EspWiFiRequestHandlerImpl::upload(ESP8266WebServer& server, String uri, HTTPUpload& upload) {
+#endif
+#ifdef ESP32
+void EspWiFi::EspWiFiRequestHandlerImpl::upload(WebServer& server, String uri, HTTPUpload& upload) {
+#endif
+  if (server.method() == HTTP_POST && uri == espWiFi.getOtaUri())
+    espWiFi.httpHandleOTAData();
+#ifdef _OTA_ATMEGA328_SERIAL
+  if (method == HTTP_POST && uri == espWiFi.getOtaAtMegaUri())
+    espWiFi.httpHandleOTAatmega328Data();
+#endif
+}
+
 void EspWiFi::httpHandleRoot() {
   DBG_PRINT("httpHandleRoot: ");
   // menu
   String message = F("<div class=\"menu\">");
-#ifdef _ESPSERIALBRIDGE_SUPPORT
-  message += F("<a id=\"serial\" class=\"dc\">Serial</a>");
-#endif  // _ESPSERIALBRIDGE_SUPPORT
-#ifdef _ESPIWEAS_SUPPORT
-  message += F("<a href=\"/devices\" class=\"dc\">Devices</a><a id=\"options\" class=\"dc\">Options</a>");
-#endif  // _ESPIWEAS_SUPPORT
-#ifdef _ESP1WIRE_SUPPORT
-  message += F("<a href=\"/devices\" class=\"dc\">Devices</a><a href=\"/schedules\" class=\"dc\">Schedules</a>");
-#endif  // _ESP1WIRE_SUPPORT
-#ifdef _MQTT_SUPPORT
-  message += "<a id=\"mqtt\" class=\"dc\">MQTT</a>";
-#endif
+//#ifdef _ESPSERIALBRIDGE_SUPPORT
+//  message += F("<a id=\"serial\" class=\"dc\">Serial</a>");
+//#endif  // _ESPSERIALBRIDGE_SUPPORT
+//#ifdef _ESP1WIRE_SUPPORT
+//  message += F("<a href=\"/devices\" class=\"dc\">Devices</a><a href=\"/schedules\" class=\"dc\">Schedules</a>");
+//#endif  // _ESP1WIRE_SUPPORT
+    // for all external EspWiFiRequestHandler check menu
+    EspWiFiRequestHandler *reqH = &mEspWiFiRequestHandler;
+    String extMenu;
+
+    while (reqH != NULL) {
+      if (reqH->isExternalRequestHandler() && (extMenu = reqH->menuHtml()) != "")
+        message += extMenu;
+      reqH = reqH->getNextRequestHandler();
+    }
+
   message += "<a id=\"ota\" class=\"dc\">OTA</a>";
   message += "<sp>" + uptime() + "</sp></div>";
 
@@ -444,25 +518,6 @@ void EspWiFi::httpHandleConfig() {
     }
 #endif
 
-#ifdef _ESPIWEAS_SUPPORT
-    if (server.arg("deviceID") != "") {
-      String result = "";
-      uint16_t resultCode;
-
-      if (deviceConfigCallback != NULL && (result = deviceConfigCallback(&server, &resultCode))) {
-        server.client().setNoDelay(true);
-        server.send(resultCode, "text/html", result);
-        httpRequestProcessed = true;
-        return;
-      }
-
-      server.client().setNoDelay(true);
-      server.send(403, "text/plain", "Forbidden");
-      httpRequestProcessed = true;
-      return;
-    }
-#endif
-
 #ifdef _ESP1WIRE_SUPPORT
     if (server.arg("deviceID") != "") {
       String result = "";
@@ -516,7 +571,7 @@ void EspWiFi::httpHandleConfig() {
       return;
     }
 #endif
-    
+
     if (server.hasArg("ota") && server.arg("ota")== "") {
       String result = F("<h4>OTA</h4>");
       result += flashForm();
@@ -571,28 +626,13 @@ void EspWiFi::httpHandleConfig() {
       return;
     }
 
-#ifdef _MQTT_SUPPORT
-    if (server.hasArg("mqtt") && server.arg("mqtt") == "") {
-      String result = F("<h4>MQTT</h4>");
-      result += mqttForm();
-      server.client().setNoDelay(true);
-      server.send(200, "text/html", result);
-      httpRequestProcessed = true;
-      return;
+    // for all external EspWiFiRequestHandler check config
+    EspWiFiRequestHandler *reqH = &mEspWiFiRequestHandler;
+    while (reqH != NULL) {
+      if (reqH->isExternalRequestHandler() && reqH->canHandle(server) && (httpRequestProcessed = reqH->handle(server, server.method(), server.uri())))
+        return;
+      reqH = reqH->getNextRequestHandler();
     }
-    
-    if (server.arg("mqtt") == "submit") {
-      if (espMqtt.testConfig(server.arg("server"), server.arg("port"), server.arg("user"), server.arg("password"))) {
-        server.client().setNoDelay(true);
-        server.send(200, "text/plain", "ok");
-      } else {
-        server.client().setNoDelay(true);
-        server.send(304, "text/plain", "MQTT connection test failed!");
-      }
-      httpRequestProcessed = true;
-      return;
-    }
-#endif
 
     if (server.hasArg("options") && server.arg("options") == "") {
       String result = F("<h4>Options</h4>");
@@ -645,39 +685,6 @@ void EspWiFi::httpHandleConfig() {
   server.send(200, "text/plain", message);
   httpRequestProcessed = true;
 }
-
-#ifdef _ESPIWEAS_SUPPORT
-void EspWiFi::httpHandleDevices() {
-  DBG_PRINT("httpHandleDevices: ");
-  String message = "", devList = "";
-
-  if (server.method() == HTTP_GET) {
-    if (deviceListCallback != NULL && (devList = deviceListCallback()) != "") {
-#ifdef _DEBUG_TIMING
-      unsigned long sendStart = micros();
-#endif
-      message = F("<div class=\"menu\"><sp><a id=\"back\" class=\"dc\">Back</a></sp></div>");
-      String html = F("<table id=\"devices\"><thead><tr><th>Name</th><th>Status</th></tr></thead>");
-      html += devList;
-      html += F("</table>");
-      message += htmlFieldSet(html, "");
-
-      server.client().setNoDelay(true);
-      server.send(200, "text/html", htmlBody(message));
-
-#ifdef _DEBUG_TIMING
-      DBG_PRINT("send " + elapTime(sendStart) + " ");
-#endif
-      httpRequestProcessed = true;
-      return;
-    }
-  }
-  
-  server.client().setNoDelay(true);
-  server.send(403, "text/plain", "Forbidden");
-  httpRequestProcessed = true;
-}
-#endif  // _ESPIWEAS_SUPPORT
 
 #ifdef _ESP1WIRE_SUPPORT
 void EspWiFi::httpHandleDevices() {
@@ -754,7 +761,7 @@ void EspWiFi::httpHandleDeviceListCss() {
   server.sendHeader("Cache-Control", "public, max-age=86400");
   server.client().setNoDelay(true);
   String css = F(".menu{height:1.3em;padding:5px 5px 5px 5px;margin-bottom:5px;background-color:#E0E0E0;}.menu .dc{float:left;}.menu sp{float: right;}label{width:4em;text-align:left;display:inline-block;} input[type=text]{margin-bottom:2px;} table td{padding:5px 15px 0px 0px;} table th{text-align:left;} fieldset{margin:0px 10px 10px 10px;max-height:20em;overflow:auto;} legend select{margin-right:5px;}");
-  css += F(".dc{border:1px solid #A0A0A0;border-radius:5px;padding:0px 3px 0px 3px;}a.dc{color:black;text-decoration:none;margin-right:3px;outline-style:none;}.dc:hover{border:1px solid #5F5F5F;background-color:#D0D0D0;cursor:pointer;} #mD{background:rgba(0,0,0,0.5);visibility:hidden;position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;padding-top:10%;} #mDC{border:1px solid #A0A0A0;border-radius:5px;background:rgba(255,255,255,1);margin:auto;display:inline-block;} #mDCC label{margin-left:10px;width:8em;text-align:left;display:inline-block;} #mDCC select,input{margin:5px 10px 0px 10px;width:13em;display:inline-block;} #mDCC table td input{margin:0px 0px 0px 0px;width:0.8em;} #mDCC table th {font-size:smaller} #mDCB{float:right;margin:10px 10px 10px 10px;} #mDCB a{margin:0px 2px 0px 2px;}");
+  css += F(".dc{border:1px solid #A0A0A0;border-radius:5px;padding:0px 3px 0px 3px;}a.dc{color:black;text-decoration:none;margin-right:3px;outline-style:none;}.dc:hover{border:1px solid #5F5F5F;background-color:#D0D0D0;cursor:pointer;} #mD{background:rgba(0,0,0,0.5);visibility:hidden;position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;} #mDC{border:1px solid #A0A0A0;border-radius:5px;background:rgba(255,255,255,1);margin-top:10%;display:inline-block;} #mDCC {margin-top: 0px;} #mDCC label{margin-left:10px;width:8em;text-align:left;display:inline-block;} #mDCC select,input{margin:5px 10px 0px 10px;width:13em;display:inline-block;} #mDCC table td input{margin:0px 0px 0px 0px;width:0.8em;} #mDCC table th {font-size:smaller} #mDCB{float:right;margin:10px 10px 10px 10px;} #mDCB a{margin:0px 2px 0px 2px;}");
   server.send(200, "text/css", css);
   httpRequestProcessed = true;
 }
@@ -763,11 +770,12 @@ void EspWiFi::httpHandleDeviceListJss() {
   DBG_PRINT("httpHandleDeviceListJss: ");
   server.sendHeader("Cache-Control", "public, max-age=86400");
   server.client().setNoDelay(true);
-  String script = F("function windowClick(e){if(e.target.className==\"dc\"&&e.target.id){modDlg(true,false,e.target.id);}}function modDlg(open,save,id){if(id=='back'){history.back();return;}document.onkeydown=(open?function(evt){evt=evt||window.event;var charCode=evt.keyCode||evt.which;if(charCode==27)modDlg(false,false);if(charCode==13)modDlg(false,true);}:null);var md=document.getElementById('mD');if(save){var form=document.getElementById('submitForm');if(form){form.submit();return;}form=document.getElementById('configForm');if(form){var aStr=form.action;var idx=aStr.indexOf('?');var url=aStr.substr(0, idx + 1);var params='';var elem;var parse;aStr=aStr.substr(idx + 1);while(1){idx=aStr.indexOf('&');if(idx>0)parse=aStr.substr(0, idx);else parse=aStr;");
+  String script = F("function gE(n){return document.getElementById(n);}\nfunction cE(n){return document.createElement(n);}\nfunction cTN(d){return document.createTextNode(d);}function aC(p,c){p.appendChild(c);}function sA(o,a,v){o.setAttribute(a,v);}\nfunction aSU(u,p,n){var sN=cE('script');sA(sN,'type','text/javascript');sA(sN,'src',u);aC(p,sN);if(typeof n!=='undefined')sA(sN,'data-name',n);}function aST(t,p){var sN=cE('script');sA(sN,'type','text/javascript');\naC(sN,cTN(t.replace('<script>', '').replace('</script>','')));aC(p,sN);}\nfunction hR(n,r,i){var o=gE(n);if(r.substring(0,8)=='<script>')aST(r,o);else o.innerHTML=r;}");
+  script += F("function windowClick(e){if(e.target.className==\"dc\"&&e.target.id){modDlg(true,false,e.target.id);}}function modDlg(open,save,id,action){action=((action===undefined)?'form':action);if(id=='back'){history.back();return;}document.onkeydown=(open?function(evt){evt=evt||window.event;var charCode=evt.keyCode||evt.which;if(charCode==27)modDlg(false,false);if(charCode==13)modDlg(false,true);}:null);var md=gE('mD');if(save){var form=gE('submitForm');if(form){form.submit();return;}form=gE('configForm');if(form){var aStr=form.action;var idx=aStr.indexOf('?');var url=aStr.substr(0, idx + 1);var params='';var elem;var parse;aStr=aStr.substr(idx + 1);while(1){idx=aStr.indexOf('&');if(idx>0)parse=aStr.substr(0, idx);else parse=aStr;");
   script += F("if(parse.substr(parse.length-1)!='='){params+=parse+'&';}else{elem=document.getElementsByName(parse.substr(0,parse.length-1));if(elem && elem[0])params+=parse+(elem[0].type!=\"checkbox\"?elem[0].value:(elem[0].checked?1:0))+'&';}if(idx>0) aStr=aStr.substr(idx+1); else break;}try{var xmlHttp=new XMLHttpRequest();xmlHttp.open('POST',url+params,false);xmlHttp.send(null);if(xmlHttp.status!=200){alert('Fehler: '+xmlHttp.statusText);return;}}catch(err){alert('Fehler: '+err.message);return;}}}if(open){try{var url='/config?ChipID=");
   script += getChipID();
-  script += F("&action=form';if(id.indexOf('schedule#')==0)url+='&schedule='+id.substr(9);else if(id=='mqtt'||id=='wifi'||id.indexOf('ota')==0||id=='resetSearch'||id=='serial'||id=='net'||id=='options')url+='&'+id+'=';else url+='&deviceID='+id;var xmlHttp=new XMLHttpRequest(); xmlHttp.open('POST',url,false);xmlHttp.send(null);if(xmlHttp.status != 200 && xmlHttp.status != 204 && xmlHttp.status != 205){alert('Fehler: '+xmlHttp.statusText);return;}if(xmlHttp.status==204){return;}if(id=='resetSearch'||xmlHttp.status==205){window.location.reload();return;}document.getElementById('mDCC').innerHTML=xmlHttp.responseText;}catch(err){alert('Fehler: '+err.message);return;}}md.style.visibility=(open?'visible':'hidden');if(!open){document.getElementById('mDCC').innerHTML='';}}");
-  script += F("function filter(){var filter=document.getElementsByName('filter')[0];var table=document.getElementById('devices');if(filter&&table){var trs=document.getElementsByTagName('tr');i=1;while(trs[i]){trs[i].style.display=((filter.value&trs[i].firstChild.nodeValue)==filter.value||filter.value==255?'table-row':'none');i++;}}}");
+  script += F("&action='+action;if(id.indexOf('schedule#')==0)url+='&schedule='+id.substr(9);else if(id=='mqtt'||id=='wifi'||id.indexOf('ota')==0||id=='resetSearch'||id=='serial'||id=='net'||id=='options'||id=='ir')url+='&'+id+'=';else url+='&deviceID='+id;var xmlHttp=new XMLHttpRequest(); xmlHttp.open('POST',url,false);xmlHttp.send(null);if(xmlHttp.status != 200 && xmlHttp.status != 204 && xmlHttp.status != 205){alert('Fehler: '+xmlHttp.statusText);return;}if(xmlHttp.status==204){return;}if(id=='resetSearch'||xmlHttp.status==205){window.location.reload();return;}\nhR('mDCC',xmlHttp.responseText,id);}catch(err){alert('Fehler: '+err.message);return;}}md.style.visibility=(open?'visible':'hidden');if(!open){gE('mDCC').innerHTML='';}}");
+  script += F("function filter(){var filter=document.getElementsByName('filter')[0];var table=gE('devices');if(filter&&table){var trs=document.getElementsByTagName('tr');i=1;while(trs[i]){trs[i].style.display=((filter.value&trs[i].firstChild.nodeValue)==filter.value||filter.value==255?'table-row':'none');i++;}}}");
   server.send(200, "text/javascript", script);
   httpRequestProcessed = true;
 }
@@ -789,6 +797,17 @@ void EspWiFi::httpHandleNotFound() {
   server.client().setNoDelay(true);
   server.send(404, "text/plain", message);
   httpRequestProcessed = true;
+}
+
+void EspWiFi::registerExternalRequestHandler(EspWiFiRequestHandler *externalRequestHandler) {
+  EspWiFiRequestHandler *reqH = &mEspWiFiRequestHandler;
+
+  while (reqH->getNextRequestHandler() != NULL)
+    reqH = reqH->getNextRequestHandler();
+  reqH->setNextRequestHandler(externalRequestHandler);
+    
+  DBG_PRINT("register ");
+  server.addHandler(externalRequestHandler);
 }
 
 boolean EspWiFi::sendMultiCast(String msg) {

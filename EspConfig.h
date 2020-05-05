@@ -25,6 +25,7 @@ public:
   void    unsetAll();
   bool    saveToFile();
   bool    hasChanged() { return configChanged; };
+  bool    spiffsMounted() { return mSpiffsMounted; };
   
   EspDeviceConfig   getDeviceConfig(String deviceName);
   
@@ -35,7 +36,7 @@ protected:
     ConfigList  *next;
   };
 
-  bool          configChanged = false;
+  bool          configChanged = false, mSpiffsMounted=false;
   ConfigList    *first = NULL;
   String        mAppName;
 

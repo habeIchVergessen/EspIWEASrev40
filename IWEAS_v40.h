@@ -3,6 +3,8 @@
 
 #include "Arduino.h"
 
+#include "EspWiFi.h"
+
 #ifdef _DEBUG_TIMING
   #define elapTime(start) (String)"(" + (String)((micros() - start) / (float)1000.0) + " ms)"
 #else

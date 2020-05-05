@@ -10,7 +10,15 @@ EspConfig::EspConfig(String appName) {
 }
 
 void EspConfig::setup() {
-  SPIFFS.begin();
+  mSpiffsMounted = SPIFFS.begin();
+
+  if (!mSpiffsMounted) {
+    DBG_PRINT("mount SPIFFS failed! try format ");
+    mSpiffsMounted = (SPIFFS.format() && SPIFFS.begin());
+    DBG_PRINTLN(String(mSpiffsMounted ? "ok" : "failed"));
+    return;
+  }
+    
   if (openRead()) {
     while (configFile.available()) {
       String data = configFile.readStringUntil('\n');
