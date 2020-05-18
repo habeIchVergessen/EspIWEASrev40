@@ -18,18 +18,8 @@ void EspConfig::setup() {
     DBG_PRINTLN(String(mSpiffsMounted ? "ok" : "failed"));
     return;
   }
-    
-  if (openRead()) {
-    while (configFile.available()) {
-      String data = configFile.readStringUntil('\n');
 
-      int idx;
-      if (data.startsWith("'") && data.endsWith("'") && (idx = data.indexOf("' = '")) > 0) {
-        setValue(data.substring(1, idx), data.substring(idx + 5, data.length() - 1));
-      }
-    }
-    configChanged = false;
-  }
+  loadData();
 }
 
 EspConfig::~EspConfig() {
@@ -48,6 +38,24 @@ bool EspConfig::openRead() {
 
 bool EspConfig::openWrite() {
   return (configFile = SPIFFS.open(fileName().c_str(), "w"));
+}
+
+bool EspConfig::loadData() {
+  bool result = false;
+  
+  if (openRead()) {
+    while (configFile.available()) {
+      String data = configFile.readStringUntil('\n');
+
+      int idx;
+      if (data.startsWith("'") && data.endsWith("'") && (idx = data.indexOf("' = '")) > 0) {
+        setValue(data.substring(1, idx), data.substring(idx + 5, data.length() - 1));
+      }
+    }
+    configChanged = !(result = true);
+  }
+
+  return result;
 }
 
 String EspConfig::getValue(String name) {
@@ -154,7 +162,7 @@ bool EspConfig::saveToFile() {
     configChanged = false;
     result = true;
   } else
-    Serial.println("saveToFile: " + fileName() + " failed!");
+    DBG_PRINT("saveToFile: " + fileName() + " failed! ");
 
   return result;
 }
@@ -165,6 +173,7 @@ EspDeviceConfig EspConfig::getDeviceConfig(String deviceName) {
 
 // class EspDeviceConfig
 EspDeviceConfig::EspDeviceConfig(String deviceName) : EspConfig(deviceName) {
+  loadData();
 }
 
 #endif  // ESP8266 || ESP32

@@ -347,10 +347,6 @@ bool EspWiFi::EspWiFiRequestHandlerImpl::canHandle(HTTPMethod method, String uri
     return true;
   if (method == HTTP_POST && uri == espWiFi.getOtaUri())
     return true;
-#ifdef _OTA_ATMEGA328_SERIAL
-  if (method == HTTP_POST && uri == espWiFi.getOtaAtMegaUri())
-    return true;
-#endif
 
   return false;
 }
@@ -358,10 +354,6 @@ bool EspWiFi::EspWiFiRequestHandlerImpl::canHandle(HTTPMethod method, String uri
 bool EspWiFi::EspWiFiRequestHandlerImpl::canUpload(String uri) {
   if (uri == espWiFi.getOtaUri())
     return true;
-#ifdef _OTA_ATMEGA328_SERIAL
-  if (uri == espWiFi.getOtaAtMegaUri())
-    return true;
-#endif
 
   return false;
 }
@@ -393,12 +385,6 @@ bool EspWiFi::EspWiFiRequestHandlerImpl::handle(WebServer& server, HTTPMethod me
     espWiFi.httpHandleOTA();
     return true;
   }
-#ifdef _OTA_ATMEGA328_SERIAL
-  if (method == HTTP_POST && uri == espWiFi.getOtaAtMegaUri()) {
-    espWiFi.httpHandleOTAatmega328();
-    return true;
-  }
-#endif
 
   return false;
 }
@@ -411,10 +397,6 @@ void EspWiFi::EspWiFiRequestHandlerImpl::upload(WebServer& server, String uri, H
 #endif
   if (server.method() == HTTP_POST && uri == espWiFi.getOtaUri())
     espWiFi.httpHandleOTAData();
-#ifdef _OTA_ATMEGA328_SERIAL
-  if (method == HTTP_POST && uri == espWiFi.getOtaAtMegaUri())
-    espWiFi.httpHandleOTAatmega328Data();
-#endif
 }
 
 void EspWiFi::httpHandleRoot() {
@@ -500,24 +482,6 @@ void EspWiFi::httpHandleConfig() {
     }
 #endif
 
-#ifdef _ESPSERIALBRIDGE_SUPPORT
-    if (server.hasArg("serial") && (server.arg("serial") == "" || server.arg("serial") == "config")) {
-      String result = "";
-      uint16_t resultCode;
-      if (deviceConfigCallback != NULL && (result = deviceConfigCallback(&server, &resultCode))) {
-        server.client().setNoDelay(true);
-        server.send(resultCode, "text/html", result);
-        httpRequestProcessed = true;
-        return;
-      }
-
-      server.client().setNoDelay(true);
-      server.send(403, "text/plain", "Forbidden");
-      httpRequestProcessed = true;
-      return;
-    }
-#endif
-
 #ifdef _ESP1WIRE_SUPPORT
     if (server.arg("deviceID") != "") {
       String result = "";
@@ -572,7 +536,7 @@ void EspWiFi::httpHandleConfig() {
     }
 #endif
 
-    if (server.hasArg("ota") && server.arg("ota")== "") {
+    if (server.hasArg("ota") && server.arg("ota") == "") {
       String result = F("<h4>OTA</h4>");
       result += flashForm();
       server.client().setNoDelay(true);
@@ -581,18 +545,7 @@ void EspWiFi::httpHandleConfig() {
       return;
     }
 
-#ifdef _OTA_ATMEGA328_SERIAL
-    if (server.hasArg("ota-addon") && server.arg("ota-addon")== "") {
-      String result = F("<h4>OTA Addon</h4>");
-      result += flashAddonForm();
-      server.client().setNoDelay(true);
-      server.send(200, "text/html", result);
-      httpRequestProcessed = true;
-      return;
-    }
-#endif
-
-    if (server.hasArg("wifi") && server.arg("wifi")== "") {
+    if (server.hasArg("wifi") && server.arg("wifi") == "") {
       String result = F("<h4>WiFi</h4>");
       result += wifiForm();
       server.client().setNoDelay(true);
@@ -770,11 +723,25 @@ void EspWiFi::httpHandleDeviceListJss() {
   DBG_PRINT("httpHandleDeviceListJss: ");
   server.sendHeader("Cache-Control", "public, max-age=86400");
   server.client().setNoDelay(true);
-  String script = F("function gE(n){return document.getElementById(n);}\nfunction cE(n){return document.createElement(n);}\nfunction cTN(d){return document.createTextNode(d);}function aC(p,c){p.appendChild(c);}function sA(o,a,v){o.setAttribute(a,v);}\nfunction aSU(u,p,n){var sN=cE('script');sA(sN,'type','text/javascript');sA(sN,'src',u);aC(p,sN);if(typeof n!=='undefined')sA(sN,'data-name',n);}function aST(t,p){var sN=cE('script');sA(sN,'type','text/javascript');\naC(sN,cTN(t.replace('<script>', '').replace('</script>','')));aC(p,sN);}\nfunction hR(n,r,i){var o=gE(n);if(r.substring(0,8)=='<script>')aST(r,o);else o.innerHTML=r;}");
-  script += F("function windowClick(e){if(e.target.className==\"dc\"&&e.target.id){modDlg(true,false,e.target.id);}}function modDlg(open,save,id,action){action=((action===undefined)?'form':action);if(id=='back'){history.back();return;}document.onkeydown=(open?function(evt){evt=evt||window.event;var charCode=evt.keyCode||evt.which;if(charCode==27)modDlg(false,false);if(charCode==13)modDlg(false,true);}:null);var md=gE('mD');if(save){var form=gE('submitForm');if(form){form.submit();return;}form=gE('configForm');if(form){var aStr=form.action;var idx=aStr.indexOf('?');var url=aStr.substr(0, idx + 1);var params='';var elem;var parse;aStr=aStr.substr(idx + 1);while(1){idx=aStr.indexOf('&');if(idx>0)parse=aStr.substr(0, idx);else parse=aStr;");
+  String script = F("var mDE=true;function gE(n){return document.getElementById(n);}function cE(n){return document.createElement(n);}function cTN(d){return document.createTextNode(d);}function aC(p,c){p.appendChild(c);}function sA(o,a,v){o.setAttribute(a,v);}function aSU(u,p,n){var sN=cE('script');sA(sN,'type','text/javascript');sA(sN,'src',u);aC(p,sN);if(typeof n!=='undefined')sA(sN,'data-name',n);}function aST(t,p){var sN=cE('script');sA(sN,'type','text/javascript');aC(sN,cTN(t.replace('<script>', '').replace('</script>','')));aC(p,sN);}function hR(n,r,i){var o=gE(n);if(r.substring(0,8)=='<script>')aST(r,o);else o.innerHTML=r;}");
+  script += F("function modDlgEn(e){mDE=(e==true?true:false);}");
+  script += F("function windowClick(e){if(e.target.className==\"dc\"&&e.target.id){modDlg(true,false,e.target.id);}}function modDlg(open,save,id,action){if(mDE==false)return;action=((action===undefined)?'form':action);if(id=='back'){history.back();return;}document.onkeydown=(open?function(evt){evt=evt||window.event;var charCode=evt.keyCode||evt.which;if(charCode==27)modDlg(false,false);if(charCode==13)modDlg(false,true);}:null);var md=gE('mD');if(save){var form=gE('submitForm');if(form){form.submit();return;}form=gE('configForm');if(form){var aStr=form.action;var idx=aStr.indexOf('?');var url=aStr.substr(0, idx + 1);var params='';var elem;var parse;aStr=aStr.substr(idx + 1);while(1){idx=aStr.indexOf('&');if(idx>0)parse=aStr.substr(0, idx);else parse=aStr;");
   script += F("if(parse.substr(parse.length-1)!='='){params+=parse+'&';}else{elem=document.getElementsByName(parse.substr(0,parse.length-1));if(elem && elem[0])params+=parse+(elem[0].type!=\"checkbox\"?elem[0].value:(elem[0].checked?1:0))+'&';}if(idx>0) aStr=aStr.substr(idx+1); else break;}try{var xmlHttp=new XMLHttpRequest();xmlHttp.open('POST',url+params,false);xmlHttp.send(null);if(xmlHttp.status!=200){alert('Fehler: '+xmlHttp.statusText);return;}}catch(err){alert('Fehler: '+err.message);return;}}}if(open){try{var url='/config?ChipID=");
   script += getChipID();
-  script += F("&action='+action;if(id.indexOf('schedule#')==0)url+='&schedule='+id.substr(9);else if(id=='mqtt'||id=='wifi'||id.indexOf('ota')==0||id=='resetSearch'||id=='serial'||id=='net'||id=='options'||id=='ir')url+='&'+id+'=';else url+='&deviceID='+id;var xmlHttp=new XMLHttpRequest(); xmlHttp.open('POST',url,false);xmlHttp.send(null);if(xmlHttp.status != 200 && xmlHttp.status != 204 && xmlHttp.status != 205){alert('Fehler: '+xmlHttp.statusText);return;}if(xmlHttp.status==204){return;}if(id=='resetSearch'||xmlHttp.status==205){window.location.reload();return;}\nhR('mDCC',xmlHttp.responseText,id);}catch(err){alert('Fehler: '+err.message);return;}}md.style.visibility=(open?'visible':'hidden');if(!open){gE('mDCC').innerHTML='';}}");
+  script += F("&action='+action;if(id.indexOf('schedule#')==0)url+='&schedule='+id.substr(9);else if(id=='wifi'||id=='net'||id=='ota'||id=='options'"); // ||id=='resetSearch'
+
+  // for all external EspWiFiRequestHandler check menu
+  EspWiFiRequestHandler *reqH = &mEspWiFiRequestHandler;
+  uint8_t extMenuIDs;
+
+  while (reqH != NULL) {
+    if (reqH->isExternalRequestHandler() && (extMenuIDs = reqH->menuIdentifiers()) > 0)
+      for (int i=0; i<extMenuIDs; i++)
+        script += "||id=='" + reqH->menuIdentifiers(i) + "'";
+    reqH = reqH->getNextRequestHandler();
+  }
+
+  script += F(")url+='&'+id+'=';else url+='&deviceID='+id;var xmlHttp=new XMLHttpRequest(); xmlHttp.open('POST',url,false);xmlHttp.send(null);if(xmlHttp.status != 200 && xmlHttp.status != 204 && xmlHttp.status != 205){alert('Fehler: '+xmlHttp.statusText);return;}if(xmlHttp.status==204){return;}if(id=='resetSearch'||xmlHttp.status==205){window.location.reload();return;}hR('mDCC',xmlHttp.responseText,id);}catch(err){alert('Fehler: '+err.message);return;}}md.style.visibility=(open?'visible':'hidden');if(!open){gE('mDCC').innerHTML='';}}");
   script += F("function filter(){var filter=document.getElementsByName('filter')[0];var table=gE('devices');if(filter&&table){var trs=document.getElementsByTagName('tr');i=1;while(trs[i]){trs[i].style.display=((filter.value&trs[i].firstChild.nodeValue)==filter.value||filter.value==255?'table-row':'none');i++;}}}");
   server.send(200, "text/javascript", script);
   httpRequestProcessed = true;
@@ -956,7 +923,7 @@ void EspWiFi::httpHandleOTAData() {
 
 #endif  // _OTA_NO_SPIFFS
 
-#if !defined(_OTA_NO_SPIFFS) || defined(_OTA_ATMEGA328_SERIAL)
+#ifndef _OTA_NO_SPIFFS
 
 bool EspWiFi::initOtaFile(String filename, String mode) {
   SPIFFS.begin();
@@ -975,10 +942,6 @@ void EspWiFi::clearOtaFile() {
     SPIFFS.remove(otaFileName);
   otaFileName = "";
 }
-
-#endif  // defined(_OTA_NO_SPIFFS) || defined(_OTA_ATMEGA328_SERIAL)
-
-#ifndef _OTA_NO_SPIFFS
 
 void EspWiFi::httpHandleOTA() {
   String message = "\n\nhttpHandleOTA: ";
@@ -1061,107 +1024,6 @@ void EspWiFi::httpHandleOTAData() {
 }
 
 #endif // _OTA_NO_SPIFFS
-
-#ifdef _OTA_ATMEGA328_SERIAL
-
-void EspWiFi::clearParser() {
-  if (intelHexFormatParser != NULL) {
-    free(intelHexFormatParser);
-    intelHexFormatParser = NULL;
-  }
-}
-
-void EspWiFi::httpHandleOTAatmega328() {
-  String message = "\n\nhttpHandleOTAatmega328: ";
-  bool doUpdate = false;
-  
-  if (SPIFFS.exists(otaFileName) && initOtaFile(otaFileName, "r")) {
-    message += otaFile.name();
-    message += + " (";
-    message += otaFile.size();
-    message += " Bytes) received!";
-    doUpdate = true;
-  } else
-    message += "file doesn't exists (maybe wrong IntelHEX format parsed!)";
-
-  DBG_PRINTLN(message);
-
-  if (doUpdate) {
-    DBG_PRINT("starting Update: ");
-    DBG_FORCE_OUTPUT();
-
-    uint8_t txPin = 1;
-#ifdef _ESPSERIALBRIDGE_SUPPORT
-    espSerialBridge.enableClientConnect(false);
-    txPin = espSerialBridge.getTxPin();
-#endif
-
-    FlashATmega328 flashATmega328(2, txPin);
-
-    flashATmega328.flashFile(&otaFile);
-
-#ifdef _ESPSERIALBRIDGE_SUPPORT
-    espSerialBridge.enableClientConnect();
-#endif
-
-    clearOtaFile();
-  }
-
-  server.client().setNoDelay(true);
-  server.sendHeader("Location", "/");
-  server.send(303, "text/plain", "See Other");
-  httpRequestProcessed = true;
-}
-
-void EspWiFi::httpHandleOTAatmega328Data() {
-  HTTPUpload& upload = server.upload();
-
-  if (upload.status == UPLOAD_FILE_START) {
-    DBG_PRINT("httpHandleOTAatmega328Data: " + upload.filename);
-    DBG_FORCE_OUTPUT();
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
-    // first block with data
-    if (upload.totalSize == 0) {
-        initOtaFile("/ota/atmega328.bin", "w");
-        intelHexFormatParser = new IntelHexFormatParser(&otaFile);
-    }
-
-    if (intelHexFormatParser == NULL)
-      return;
-
-    DBG_PRINT(".");
-    if ((upload.totalSize % HTTP_UPLOAD_BUFLEN) == 20)
-      DBG_PRINTLN("\n");
-
-    if (!intelHexFormatParser->parse(upload.buf, upload.currentSize)) {
-      DBG_PRINTLN("\nwriting file " + otaFileName + " failed!");
-      DBG_FORCE_OUTPUT();
-
-      clearParser();
-      clearOtaFile();
-    }
-  } else if (upload.status == UPLOAD_FILE_END) {
-    if (otaFile) {
-      bool uploadComplete = (otaFile.size() == intelHexFormatParser->sizeBinaryData() && intelHexFormatParser->isEOF());
-      
-      DBG_PRINTF("\nend: %s (%d Bytes)\n", otaFile.name(), otaFile.size());
-      DBG_FORCE_OUTPUT();
-      otaFile.close();
-      
-      clearParser();
-      if (!uploadComplete)     
-        clearOtaFile();
-    }
-  } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    DBG_PRINTF("\naborted\n");
-    DBG_FORCE_OUTPUT();
-
-    clearParser();
-    clearOtaFile();
-  }
-}
-
-#endif  // _OTA_ATMEGA328_SERIAL
 
 #endif  // ESP8266 || ESP32
 

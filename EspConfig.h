@@ -45,6 +45,7 @@ protected:
   String fileName() { return "/config/" + mAppName + ".cfg"; };
   bool openRead();
   bool openWrite();
+  bool loadData();
 };
 
 class EspDeviceConfig : public EspConfig {

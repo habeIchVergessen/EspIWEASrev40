@@ -45,13 +45,6 @@
 
 #include "EspConfig.h"
 
-#ifdef _OTA_ATMEGA328_SERIAL
-  #include "IntelHexFormatParser.h"
-  #include "FlashATMega328Serial.h"
-
-  IntelHexFormatParser *intelHexFormatParser = NULL;
-#endif
-
 #ifdef ESP8266
   extern "C" {
     #include "user_interface.h"
@@ -83,6 +76,8 @@ protected:
   String getConfigUri() { return "/config"; };
 
   virtual String menuHtml() { return ""; };
+  virtual uint8_t menuIdentifiers() { return 0; };
+  virtual String menuIdentifiers(uint8_t identifier) { return ""; };
 
   bool mExternalRequestHandler = true;
   EspWiFiRequestHandler *mNextRequestHandler = NULL;
@@ -112,11 +107,8 @@ class EspWiFi {
     static String getHostname();
     static String getDefaultHostname();
 
-#if defined(_ESP1WIRE_SUPPORT) || defined(_ESPSERIALBRIDGE_SUPPORT)
-    void registerDeviceConfigCallback(DeviceConfigCallback callback) { deviceConfigCallback = callback; };
-#endif
-    
 #ifdef _ESP1WIRE_SUPPORT
+    void registerDeviceConfigCallback(DeviceConfigCallback callback) { deviceConfigCallback = callback; };
     void registerDeviceListCallback(DeviceListCallback callback) { deviceListCallback = callback; };
     void registerScheduleConfigCallback(DeviceConfigCallback callback) { scheduleConfigCallback = callback; };
     void registerScheduleListCallback(DeviceListCallback callback) { scheduleListCallback = callback; };
@@ -147,7 +139,6 @@ class EspWiFi {
     String getDevListCssUri() { return "/static/deviceList.css"; };
     String getDevListJsUri() { return "/static/deviceList.js"; };
     String getOtaUri() { return "/ota/" + getChipID() + ".bin"; };
-    String getOtaAtMegaUri() { return "/ota/atmega328.bin"; };
     void setHostname(String hostname);
     String otaFileName;
     File otaFile;
@@ -216,19 +207,13 @@ class EspWiFi {
     void httpHandleSchedules();
 #endif
 
-#if !defined(_OTA_NO_SPIFFS) || defined(_OTA_ATMEGA328_SERIAL)
+#ifndef _OTA_NO_SPIFFS
     bool initOtaFile(String filename, String mode);
     void clearOtaFile();
 #endif
 
     void httpHandleOTA();
     void httpHandleOTAData();
-
-#ifdef _OTA_ATMEGA328_SERIAL
-    void clearParser();
-    void httpHandleOTAatmega328();
-    void httpHandleOTAatmega328Data();
-#endif
 };
 
 extern EspWiFi espWiFi;

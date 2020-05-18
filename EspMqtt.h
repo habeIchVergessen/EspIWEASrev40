@@ -46,6 +46,8 @@ protected:
     bool canHandle(WebServer& server) override;
 #endif
     String menuHtml() override;
+    uint8_t menuIdentifiers() override;
+    String menuIdentifiers(uint8_t identifier) override;
 
     friend class EspMqtt;
   } espMqttRequestHandler;

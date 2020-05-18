@@ -112,16 +112,6 @@ String flashForm() {
   return htmlForm(html, action, "post", "submitForm", "multipart/form-data");
 }
 
-#ifdef _OTA_ATMEGA328_SERIAL
-String flashAddonForm() {
-  String action = F("/ota/atmega328.bin");
-
-  String html = htmlInput("file", "file", "", 0) + htmlNewLine();
-
-  return htmlForm(html, action, "post", "submitForm", "multipart/form-data");
-}
-#endif
-
 String htmlForm(String html, String pAction, String pMethod, String pID, String pEnctype, String pLegend) {
   String result = F("<form");
   if (pID != "") {

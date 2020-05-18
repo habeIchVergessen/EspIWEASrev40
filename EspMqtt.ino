@@ -169,5 +169,17 @@ String EspMqtt::EspMqttRequestHandler::menuHtml() {
   return htmlMenuItem(espMqtt.mqttMenuId(), "MQTT");
 }
 
+uint8_t EspMqtt::EspMqttRequestHandler::menuIdentifiers() {
+  return 1;
+}
+
+String EspMqtt::EspMqttRequestHandler::menuIdentifiers(uint8_t identifier) {
+  switch (identifier) {
+    case 0: return espMqtt.mqttMenuId();break;
+  }
+  
+  return "";
+}
+
 #endif  // _MQTT_SUPPORT
 

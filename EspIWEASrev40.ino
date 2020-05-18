@@ -1,6 +1,6 @@
 
 #define PROGNAME "EspIWEASrev40"
-#define PROGVERS "0.2a"
+#define PROGVERS "0.2b"
 #define PROGBUILD String(__DATE__) + " " + String(__TIME__)
 
 int         Time_VOLTAGE  =  120;                       // ALife-Intervall für Abfrage der Betriebsspannung in Sekunden
@@ -116,7 +116,8 @@ class EspIWEASRequestHandler : public EspWiFiRequestHandler {
     bool canHandle(WebServer& server) override;
 #endif
     String menuHtml() override;
-  
+    String menuIdentifierOptions() { return "options"; };
+
     String getDevicesUri() { return "/devices"; };
 
     String handleDeviceList();
@@ -641,7 +642,8 @@ bool EspIWEASRequestHandler::handle(WebServer& server, HTTPMethod method, String
 }
 
 String EspIWEASRequestHandler::menuHtml() {
-  return F("<a href=\"/devices\" class=\"dc\">Devices</a><a id=\"options\" class=\"dc\">Options</a>");
+//return F("<a href=\"/devices\" class=\"dc\">Devices</a><a id=\"options\" class=\"dc\">Options</a>");
+  return htmlAnker("", "dc", "Devices", getDevicesUri()) + htmlMenuItem(menuIdentifierOptions(), "Options");
 }
 
 String EspIWEASRequestHandler::handleDeviceList() {
